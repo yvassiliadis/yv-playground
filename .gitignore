@@ -1,0 +1,40 @@
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- Secrets / env ---
+.env
+.env.*
+*.key
+*.pem
+
+# --- Data files (common for playgrounds) ---
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.sqlite
+*.db
+
+# --- Logs / temp ---
+*.log
+tmp/
+temp/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node / JS ---
+node_modules/
+dist/
+build/
+.next/
+coverage/
