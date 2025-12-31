@@ -384,9 +384,26 @@ def style_plot(
     if ax.get_ylabel():
         ax.set_ylabel(_title_case(ax.get_ylabel()))
 
+    # Enforce default cmap (but don't clobber an explicit cmap like "viridis")
     if apply_cmap and _ACTIVE_CMAP is not None:
+        # seaborn heatmap default is usually "rocket"
+        seaborn_default_names = {"rocket", "rocket_r"}
+        if sns is not None:
+            try:
+                seaborn_default_names.add(sns.cm.rocket.name)
+            except Exception:
+                pass
+
+        def maybe_set(mappable) -> None:
+            cur = getattr(mappable, "cmap", None)
+            cur_name = getattr(cur, "name", None) if cur is not None else None
+            # Only override if it looks like seaborn default (i.e., user didn't pass a cmap)
+            if cur_name in seaborn_default_names:
+                mappable.set_cmap(_ACTIVE_CMAP)
+
         for im in getattr(ax, "images", []):
-            im.set_cmap(_ACTIVE_CMAP)
+            maybe_set(im)
+
         for coll in getattr(ax, "collections", []):
             if hasattr(coll, "set_cmap"):
-                coll.set_cmap(_ACTIVE_CMAP)
+                maybe_set(coll)
