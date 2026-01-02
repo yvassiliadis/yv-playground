@@ -22,6 +22,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from matplotlib.colors import Colormap, LinearSegmentedColormap
+from pypalettes import load_cmap
+
 import re
 from cycler import cycler
 
@@ -60,6 +62,13 @@ KIWIISH = [
     "#0072B2",  # blue
 ]
 
+# Discrete 
+_DEFAULT_DISCRETE = load_cmap("Coconut", cmap_type='discrete', reverse=True)
+DEFAULT_PALETTE = list(_DEFAULT_DISCRETE.colors)  # list[str] hex colors
+
+# Continuous 
+DEFAULT_CMAP = load_cmap("Coconut", cmap_type="continuous", reverse=True)
+
 def _sorted_hex(colors: Sequence[str]) -> list[str]:
     # sort by hex string (case-insensitive) for deterministic cmap construction
     return sorted(colors, key=lambda c: c.lower())
@@ -89,10 +98,10 @@ def _title_case(s: str) -> str:
 def apply_style(
     *,
     use_seaborn: bool = True,
-    palette: Sequence[str] = OKABE_ITO,
+    palette: Sequence[str] = DEFAULT_PALETTE,
     install_font: bool = True,
     font_name: str = "Funnel Sans",
-    cmap: Colormap | None = None,
+    cmap: Colormap | None = DEFAULT_CMAP,
 ) -> PlotFonts:
     """
     Apply global plotting defaults (Scope3-style). Call once per notebook/session.
