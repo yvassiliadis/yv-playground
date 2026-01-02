@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=2.4.0",
     "pandas>=2.3.3",
     "pyfonts>=1.2.0",
+    "pypalettes>=0.2.1",
     "seaborn>=0.13.2",
     "utilities",
 ]
