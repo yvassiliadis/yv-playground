@@ -1,0 +1,20 @@
+[project]
+name = "panini-stickers"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.1",
+    "pandas>=3.0.0",
+    "scipy>=1.17.0",
+    "seaborn>=0.13.2",
+    "utilities",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+]
+
+[tool.uv.sources]
+utilities = { path = "../../utilities", editable = true }

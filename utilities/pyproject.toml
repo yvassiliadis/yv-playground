@@ -7,7 +7,9 @@ authors = [
     { name = "yvassiliadis", email = "yannis.vassiliadis@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pypalettes>=0.2.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.20,<0.10.0"]
