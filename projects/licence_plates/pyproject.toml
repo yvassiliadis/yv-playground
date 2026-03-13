@@ -5,10 +5,11 @@ requires-python = ">=3.11"
 dependencies = [
     "cycler>=0.12.1",
     "matplotlib>=3.10.8",
-    "numpy>=2.4.0",
+    "numpy>=2.4.1",
     "pandas>=2.3.3",
     "pyfonts>=1.2.0",
     "pypalettes>=0.2.1",
+    "scipy>=1.17.1",
     "seaborn>=0.13.2",
     "utilities",
 ]

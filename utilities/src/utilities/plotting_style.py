@@ -341,8 +341,8 @@ def style_plot(
     legend: bool = True,
     legend_y: float = 1.01,
     legend_max_cols: int = 6,
-    legend_bbox: Tuple[float, float, float, float] = (0, 1.01, 1, 0.2),
     apply_cmap: bool = True,
+    legend_axes: Optional[Sequence[plt.Axes]] = None,
 ) -> None:
     """
     One-stop post-plot styling (like Scope3's style_plot).
@@ -362,7 +362,22 @@ def style_plot(
 
     # Legend: horizontal, below subtitle (and above plot)
     if legend:
-        handles, labels = ax.get_legend_handles_labels()
+        axes_for_legend = [ax]
+        if legend_axes:
+            axes_for_legend.extend(legend_axes)
+
+        handles = []
+        labels = []
+        seen = set()
+
+        for a in axes_for_legend:
+            h, l = a.get_legend_handles_labels()
+            for hh, ll in zip(h, l):
+                if ll and ll not in seen:
+                    handles.append(hh)
+                    labels.append(ll)
+                    seen.add(ll)
+
         if handles:
             if df is not None and legend_column is not None:
                 try:
@@ -377,7 +392,7 @@ def style_plot(
             ax.legend(
                 handles, labels,
                 loc="lower left",
-                bbox_to_anchor=(0.0, legend_y),  # point anchor, not full-width box
+                bbox_to_anchor=(0.0, legend_y),
                 ncol=ncol,
                 frameon=False,
                 borderaxespad=0.0,
