@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 
 from ..config import EXCLUDED_TICKERS
 from ..models import Pick
+from .philosophy import ADVISOR_PHILOSOPHY, MANDATE
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +20,13 @@ Before making picks, use web search to understand what's working in the market R
 
 Do NOT search for individual stocks — the pre-screened list below is already fundamentals-qualified. Use search only to understand which sectors and themes have current momentum, then apply that context when selecting from the list. Each stock in the list includes its industry — use that to cross-reference your macro research against specific names (e.g. if cloud software has earnings momentum, favour stocks labelled Software—Application or Software—Infrastructure).
 
-Your mandate:
-- Pick individual stocks traded on US exchanges (no ETFs)
-- Aggressive growth, long-term bias (hold for years)
-- Core conviction picks: compounders with durable competitive advantages — typically 10-20, never more than 25
-- Exactly 3 moonshot picks: asymmetric upside, acceptable total loss
-- No crypto
-- Avoid traditional energy companies
-- ESG-lite: prefer good mission/diversity when all else equal
-- Benchmark: beat S&P 500 and a blend of IGM + NVDA
-- Do not recommend or include: {excluded_tickers}
+{mandate}
 
 For each pick provide:
 1. A rationale grounded in your research (2-3 sentences max)
 2. Variant perception — what does the market misunderstand or underestimate that creates an edge for a long-term holder? (1-2 sentences max)
 
-Moonshot picks: exactly 3. Core picks: 10-20 (25 max)."""
+Moonshot picks: exactly 3. Core picks: 10-20 (25 max).""".replace("{mandate}", MANDATE)
 
 PICKS_SCHEMA = {
     "type": "object",
@@ -82,12 +74,9 @@ PICKS_SCHEMA = {
     "additionalProperties": False,
 }
 
-ADVISOR_SYSTEM_PROMPT = """You are a member of an investment committee evaluating a specific stock.
-Your investment philosophy:
-- Aggressive growth, long-term bias
-- No crypto
-- Avoid traditional energy companies
-- ESG-lite: prefer good mission/diversity when all else equal
+ADVISOR_SYSTEM_PROMPT = """\
+You are a member of an investment committee evaluating a specific stock.
+{advisor_philosophy}
 
 Be direct and opinionated. Return ONLY valid JSON:
 {
@@ -98,7 +87,7 @@ Be direct and opinionated. Return ONLY valid JSON:
   "suggested_allocation_pct": 5.0
 }
 
-suggested_allocation_pct: if recommendation is "buy", suggest a portfolio allocation percentage (0-100) considering the current portfolio composition provided. If "pass", return 0. If "watch", return a small placeholder like 1-2."""
+suggested_allocation_pct: if recommendation is "buy", suggest a portfolio allocation percentage (0-100) considering the current portfolio composition provided. If "pass", return 0. If "watch", return a small placeholder like 1-2.""".replace("{advisor_philosophy}", ADVISOR_PHILOSOPHY)
 
 
 _CITATION_RE = re.compile(r"\s*\(\[[^\]]*\]\(https?://[^)]+\)\)")
