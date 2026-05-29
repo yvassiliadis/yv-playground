@@ -1,0 +1,44 @@
+{
+  "cached_at": "2026-01-01T00:00:00.000000+00:00",
+  "picks": [
+    {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corp",
+      "rationale": "AI data-center capex is accelerating and remains supply-constrained in memory, optics, and power — sustaining pricing and unit growth across GPU platforms. HBM remains tight, extending the compute cycle's duration and margin support.",
+      "conviction": "core",
+      "member": "gpt",
+      "variant_perception": "Street underestimates the length of the AI buildout and NVIDIA's mix shift to high-ASP platforms and software/networking attach, keeping gross margins structurally higher for longer.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    },
+    {
+      "ticker": "AMZN",
+      "company_name": "Amazon.com Inc",
+      "rationale": "AWS re-acceleration driven by AI workloads and enterprise cloud migrations. Advertising segment growing at 20%+ with near-100% incremental margins. Retail profitability inflecting as logistics network matures.",
+      "conviction": "core",
+      "member": "gpt",
+      "variant_perception": "Market discounts the durability of AWS margin expansion and the advertising flywheel. FCF inflection is underappreciated relative to earnings power — free cash flow yield is materially higher than reported earnings suggest.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    },
+    {
+      "ticker": "MSFT",
+      "company_name": "Microsoft Corp",
+      "rationale": "Azure cloud + Office Copilot upsell creates a durable margin flywheel. Strong FCF and reasonable forward multiple given growth trajectory. One of the cleanest ways to own the AI transition with lower execution risk than pure-play names.",
+      "conviction": "high",
+      "member": "gpt",
+      "variant_perception": "Consensus underestimates Copilot attach rates in enterprise — early renewal data suggests AI seat upsell is stickier than legacy software expansions, pointing to durable ARPU expansion through the decade.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    }
+  ]
+}

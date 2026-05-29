@@ -1,0 +1,10 @@
+{
+  "tickers": [
+    "TSLA",
+    "DJT"
+  ],
+  "sectors": [
+    "Basic Materials",
+    "Energy"
+  ]
+}

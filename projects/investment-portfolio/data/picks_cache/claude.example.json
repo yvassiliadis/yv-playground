@@ -1,0 +1,44 @@
+{
+  "cached_at": "2026-01-01T00:00:00.000000+00:00",
+  "picks": [
+    {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corp",
+      "rationale": "NVIDIA's Blackwell architecture ramp is driving an unprecedented AI infrastructure supercycle, with hyperscaler capex commitments accelerating. At 60%+ operating margins and triple-digit ROE, this is the highest-quality compounder in the market with a near-monopoly on AI training and inference compute.",
+      "conviction": "core",
+      "member": "claude",
+      "variant_perception": "The market treats NVIDIA as a cyclical semiconductor name, underestimating the structural shift to perpetual GPU-dense data center buildouts and NVIDIA's expanding software moat (CUDA ecosystem) which creates durable switching costs well beyond hardware.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    },
+    {
+      "ticker": "MSFT",
+      "company_name": "Microsoft Corp",
+      "rationale": "Microsoft's Azure cloud platform is the primary enterprise beneficiary of AI monetization, with Copilot integration across its 365 suite driving ARPU expansion on an installed base of hundreds of millions of seats. At 47% operating margins and 34% ROE, it is the most capital-efficient hyperscaler.",
+      "conviction": "core",
+      "member": "claude",
+      "variant_perception": "The market underestimates the compounding effect of Copilot seat upsell economics — converting existing Office customers to premium AI tiers at minimal incremental CAC is a margin flywheel the consensus is too slow to price into terminal value models.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    },
+    {
+      "ticker": "AMZN",
+      "company_name": "Amazon.com Inc",
+      "rationale": "AWS is re-accelerating as enterprises shift from cost-optimization mode back to AI-driven cloud expansion. The retail segment provides a free option on advertising growth and logistics efficiency. FCF generation is substantial and underappreciated.",
+      "conviction": "high",
+      "member": "claude",
+      "variant_perception": "Street models underweight the magnitude of AWS margin expansion as AI workloads carry higher ASPs than legacy cloud, and advertising's take rate on the commerce flywheel continues to expand with minimal incremental cost.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    }
+  ]
+}

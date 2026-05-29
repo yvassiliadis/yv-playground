@@ -1,11 +1,19 @@
+# Allow example files even if root gitignore excludes by extension
+!data/*.example.*
+!data/**/*.example.*
+
 # Project data — commit *.example.* variants instead
 data/advisor_cache.json
-data/advisor_log.*
+data/advisor_log.csv
+data/advisor_log.json
 data/enrichment_cache.json
 data/exclusions.json
 data/perf_cache.json
-data/picks_cache/
 data/screener_cache.json
+data/picks_cache/claude.json
+data/picks_cache/gemini.json
+data/picks_cache/gpt.json
+data/picks_cache/research.json
 data/runs/
 
 # Local Claude settings

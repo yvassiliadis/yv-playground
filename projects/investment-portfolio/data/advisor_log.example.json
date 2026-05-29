@@ -1,0 +1,58 @@
+[
+  {
+    "timestamp": "2026-01-01T10:00:00.000000+00:00",
+    "ticker": "NVDA",
+    "company_name": "NVIDIA Corp",
+    "recommendation": "buy",
+    "fits_philosophy": true,
+    "suggested_allocation_pct": 8.0,
+    "claude_take": "NVIDIA's Blackwell ramp is driving an AI infrastructure supercycle. Near-monopoly on AI training compute with CUDA moat creating durable switching costs.",
+    "gpt_take": "AI data-center capex is accelerating and supply-constrained. Street underestimates the length of the AI buildout and NVIDIA's mix shift to high-ASP platforms.",
+    "gemini_take": "NVIDIA remains the undisputed leader in AI acceleration. The semiconductor sector is experiencing exceptional growth driven by AI infrastructure buildout.",
+    "claude_rec": "buy",
+    "gpt_rec": "buy",
+    "gemini_rec": "buy"
+  },
+  {
+    "timestamp": "2026-01-01T10:05:00.000000+00:00",
+    "ticker": "MSFT",
+    "company_name": "Microsoft Corp",
+    "recommendation": "buy",
+    "fits_philosophy": true,
+    "suggested_allocation_pct": 6.0,
+    "claude_take": "Azure is the primary enterprise beneficiary of AI monetization. Copilot integration drives ARPU expansion at minimal incremental CAC — a margin flywheel consensus is too slow to price in.",
+    "gpt_take": "Azure cloud + Office Copilot upsell creates a durable margin flywheel. One of the cleanest ways to own the AI transition with lower execution risk.",
+    "gemini_take": "Microsoft is a diversified AI powerhouse. Azure cloud is the primary engine of success with its enterprise software suite deeply integrated with AI capabilities.",
+    "claude_rec": "buy",
+    "gpt_rec": "buy",
+    "gemini_rec": "buy"
+  },
+  {
+    "timestamp": "2026-01-01T10:10:00.000000+00:00",
+    "ticker": "TSLA",
+    "company_name": "Tesla Inc",
+    "recommendation": "pass",
+    "fits_philosophy": false,
+    "suggested_allocation_pct": 0.0,
+    "claude_take": "Excluded ticker — skipped by committee.",
+    "gpt_take": "",
+    "gemini_take": "",
+    "claude_rec": "pass",
+    "gpt_rec": "",
+    "gemini_rec": ""
+  },
+  {
+    "timestamp": "2026-01-01T10:15:00.000000+00:00",
+    "ticker": "AAPL",
+    "company_name": "Apple Inc",
+    "recommendation": "watch",
+    "fits_philosophy": true,
+    "suggested_allocation_pct": 2.0,
+    "claude_take": "Apple Intelligence across 2B+ devices is a new AI monetization surface. Services compounds at high margins but current valuation limits upside.",
+    "gpt_take": "Solid business but multiple is full. Would want to see AI monetization evidence before adding. Services growth remains the key driver.",
+    "gemini_take": "Apple Intelligence integration and Services expansion are compelling. The brand moat and ecosystem lock-in remain unmatched in consumer technology.",
+    "claude_rec": "watch",
+    "gpt_rec": "pass",
+    "gemini_rec": "buy"
+  }
+]

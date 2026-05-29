@@ -1,0 +1,44 @@
+{
+  "cached_at": "2026-01-01T00:00:00.000000+00:00",
+  "picks": [
+    {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corp",
+      "rationale": "NVIDIA remains the undisputed leader in AI acceleration. The semiconductor industry is projected to deliver exceptional year-over-year growth driven by AI infrastructure buildout. NVIDIA's GPUs are fundamental to data centers, cloud computing, and advanced AI models.",
+      "conviction": "core",
+      "member": "gemini",
+      "variant_perception": "The market continues to underestimate the longevity and breadth of the AI infrastructure spending cycle. The true value lies in its CUDA software platform and ecosystem, creating an impenetrable moat that makes switching costs incredibly high for AI developers.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    },
+    {
+      "ticker": "MSFT",
+      "company_name": "Microsoft Corp",
+      "rationale": "Microsoft is a diversified AI powerhouse, with its Azure cloud computing emerging as a primary engine of success. Its robust enterprise software suite, now deeply integrated with AI capabilities (Copilot), positions it to capture significant value from ongoing digital transformation.",
+      "conviction": "core",
+      "member": "gemini",
+      "variant_perception": "The market may underestimate the compounding effect of Microsoft's AI strategy across its entire product portfolio. The Copilot monetization is still in early innings, and long-term subscription revenue from AI-powered tools will likely prove more durable and higher-margin than currently factored into consensus.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    },
+    {
+      "ticker": "AAPL",
+      "company_name": "Apple Inc",
+      "rationale": "Apple Intelligence integration across its installed base of 2B+ devices creates a new AI monetization surface. Services segment continues to compound at high margins. The brand moat and ecosystem lock-in remain unmatched in consumer technology.",
+      "conviction": "high",
+      "member": "gemini",
+      "variant_perception": "Street underestimates Apple's ability to monetize AI features through premium tiers and subscription expansion, treating it as a hardware company when the margin profile increasingly resembles a software business.",
+      "current_price": null,
+      "mean_target": null,
+      "median_target": null,
+      "mean_upside_pct": null,
+      "median_upside_pct": null
+    }
+  ]
+}

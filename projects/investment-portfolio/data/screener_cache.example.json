@@ -1,0 +1,49 @@
+{
+  "cached_at": "2026-01-01T00:00:00.000000+00:00",
+  "stocks": [
+    {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corp",
+      "industry": "Semiconductors",
+      "gross_margin": 0.745,
+      "roe": 1.142,
+      "roic": null,
+      "operating_margin": 0.617,
+      "earnings_date": "Feb 26/a",
+      "tier": "core"
+    },
+    {
+      "ticker": "MSFT",
+      "company_name": "Microsoft Corp",
+      "industry": "Software - Infrastructure",
+      "gross_margin": 0.694,
+      "roe": 0.341,
+      "roic": null,
+      "operating_margin": 0.468,
+      "earnings_date": "Jan 29/a",
+      "tier": "core"
+    },
+    {
+      "ticker": "AAPL",
+      "company_name": "Apple Inc",
+      "industry": "Consumer Electronics",
+      "gross_margin": 0.479,
+      "roe": 1.415,
+      "roic": null,
+      "operating_margin": 0.326,
+      "earnings_date": "Jan 30/a",
+      "tier": "suggestion"
+    },
+    {
+      "ticker": "AMZN",
+      "company_name": "Amazon.com Inc",
+      "industry": "Internet Retail",
+      "gross_margin": 0.489,
+      "roe": 0.228,
+      "roic": null,
+      "operating_margin": 0.107,
+      "earnings_date": "Feb 06/a",
+      "tier": "suggestion"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "NVDA": {
+    "cached_at": "2026-01-01T00:00:00.000000+00:00",
+    "upside": {
+      "mean_upside_pct": 33.2,
+      "median_upside_pct": 29.4
+    },
+    "claude": {
+      "company_name": "NVIDIA Corp (NVDA)",
+      "recommendation": "buy",
+      "fits_philosophy": true,
+      "take": "NVIDIA's Blackwell architecture ramp is driving an AI infrastructure supercycle. At 60%+ operating margins and triple-digit ROE, this is among the highest-quality compounders in the market with a near-monopoly on AI training compute. The CUDA ecosystem creates durable switching costs well beyond the hardware cycle.",
+      "suggested_allocation_pct": 8.0
+    },
+    "gpt": {
+      "company_name": "NVIDIA Corp (NVDA)",
+      "recommendation": "buy",
+      "fits_philosophy": true,
+      "take": "AI data-center capex is accelerating into 2026-2027 and remains supply-constrained. Street underestimates the length of the AI buildout and NVIDIA's mix shift to high-ASP platforms, keeping gross margins structurally higher for longer.",
+      "suggested_allocation_pct": 7.5
+    },
+    "gemini": {
+      "company_name": "NVDA",
+      "recommendation": "buy",
+      "fits_philosophy": true,
+      "take": "NVIDIA remains the undisputed leader in AI acceleration. The semiconductor sector is projected to deliver exceptional year-over-year growth driven by AI infrastructure buildout. NVIDIA's GPUs are fundamental to data centers and advanced AI models, positioning it at the core of a multi-year investment cycle.",
+      "suggested_allocation_pct": 8.0
+    }
+  },
+  "MSFT": {
+    "cached_at": "2026-01-01T00:00:00.000000+00:00",
+    "upside": {
+      "mean_upside_pct": 14.3,
+      "median_upside_pct": 13.1
+    },
+    "claude": {
+      "company_name": "Microsoft Corp (MSFT)",
+      "recommendation": "buy",
+      "fits_philosophy": true,
+      "take": "Azure is the primary enterprise beneficiary of AI monetization, with Copilot integration across the 365 suite driving ARPU expansion on hundreds of millions of seats. At 47% operating margins and 34% ROE, it is the most capital-efficient hyperscaler.",
+      "suggested_allocation_pct": 6.0
+    },
+    "gpt": {
+      "company_name": "Microsoft Corp (MSFT)",
+      "recommendation": "buy",
+      "fits_philosophy": true,
+      "take": "Azure cloud + Office Copilot upsell creates a durable margin flywheel. Strong FCF, reasonable forward multiple given the growth trajectory. One of the cleanest ways to own the AI transition with lower execution risk.",
+      "suggested_allocation_pct": 5.5
+    },
+    "gemini": {
+      "company_name": "Microsoft Corp",
+      "recommendation": "buy",
+      "fits_philosophy": true,
+      "take": "Microsoft is a diversified AI powerhouse. Azure cloud is the primary engine of success, with its enterprise software suite deeply integrated with AI capabilities. Consistently delivers strong earnings and benefits directly from massive AI-related capital spending.",
+      "suggested_allocation_pct": 6.0
+    }
+  }
+}
