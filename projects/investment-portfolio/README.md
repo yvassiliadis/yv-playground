@@ -27,6 +27,45 @@ Built as a showcase of how I use LLMs iteratively to ship a real product. See [`
 - **Performance** — portfolio vs. benchmarks (SPY, VGT, VTI) over a rolling 1-year window
 - **Exclusions** — live filtering of tickers or sectors from the portfolio, applied without re-running
 
+## How it works
+
+```mermaid
+flowchart TD
+    U(["User"]) -->|"Run committee"| FV
+    U -->|"Ask about a ticker"| TICK
+
+    subgraph SCREEN["① Screen Universe"]
+        FV["Finviz<br/>GM >40% · D/E <1x · Cap >$2B · PEG <3"]
+        FV -->|"ROE ≥ 20%"| SG[Suggestions]
+        FV -->|"-15% < ROE < 0%"| FCF["yfinance FCF check<br/>async · max 30 concurrent"]
+        FCF -->|passes| OP[Opportunities]
+    end
+
+    SG & OP --> FMT["format_for_prompt<br/>~100–500 tickers · identical input to all 3 models"]
+
+    TICK --> FUND["yfinance fundamentals<br/>+ portfolio context"]
+
+    subgraph LLM["② Parallel LLM Calls — Claude · GPT-4o · Gemini"]
+        direction LR
+        CL["web_search<br/>macro + sectors<br/>→ picks / opinion"]
+        GP["web_search<br/>→ picks / opinion"]
+        GE["GoogleSearch<br/>→ picks / opinion"]
+    end
+
+    FMT --> LLM
+    FUND --> LLM
+
+    LLM -->|committee run| ENR["③ yfinance enrichment<br/>price + analyst targets → upside %"]
+    LLM -->|advisor| VOTE["Vote → buy / watch / pass<br/>per-member take + allocation %"]
+
+    ENR --> AGG["④ Aggregate<br/>drop < 2-member tickers<br/>weight = conviction × members × upside<br/>normalize → 100%"]
+
+    AGG --> PORT[("Portfolio<br/>data/runs/*.json")]
+    PORT --> VIEW["Portfolio View · History"]
+
+    PORT -.->|"portfolio context"| FUND
+```
+
 ## Getting started
 
 ### Demo mode (no API keys needed)
@@ -88,4 +127,11 @@ This project was built iteratively using Claude Code. The [`docs/planning/`](doc
 
 ## Product pitch
 
-A two-page product one-pager describing this as a commercial offering is in [`docs/quorum-pitch.pdf`](docs/quorum-pitch.pdf).
+A two-page product one-pager describing this as a commercial offering — [`docs/quorum-pitch.pdf`](docs/quorum-pitch.pdf).
+
+<table>
+<tr>
+  <td><img src="docs/screenshots/pitch-page1.png"></td>
+  <td><img src="docs/screenshots/pitch-page2.png"></td>
+</tr>
+</table>
