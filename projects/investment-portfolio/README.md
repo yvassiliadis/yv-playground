@@ -82,6 +82,7 @@ scripts/            one-off run and benchmark scripts
 docs/
   planning/         PRD, design plans, prototype
   screenshots/      product screenshots
+  quorum-pitch.*    product one-pager (HTML + PDF)
 tests/
 ```
 

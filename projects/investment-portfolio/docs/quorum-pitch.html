@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quorum — AI Investment Committee</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:  #0d1b2a;
+    --gold:  #d4a843;
+    --gold2: #f0c96a;
+    --green: #2ecc8a;
+    --muted: #6b7a8d;
+    --light: #f5f7fa;
+    --white: #ffffff;
+    --text:  #1c2c3e;
+    --border:#dde3eb;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--text);
+    background: #fff;
+    font-size: 9.5pt;
+    line-height: 1.5;
+  }
+
+  /* ── PAGE WRAPPER ───────────────────────────────────────── */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    position: relative;
+  }
+
+  .page + .page {
+    margin-top: 8mm;
+    page-break-before: always;
+  }
+
+  /* ── HEADER ─────────────────────────────────────────────── */
+  .header {
+    background: var(--navy);
+    padding: 20px 36px 16px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--gold2), transparent);
+  }
+  .wordmark { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+  .wordmark-name {
+    font-size: 26pt; font-weight: 800; color: #fff; letter-spacing: -1px;
+  }
+  .wordmark-badge {
+    font-size: 7pt; font-weight: 600; color: var(--gold);
+    border: 1px solid var(--gold); border-radius: 3px;
+    padding: 2px 7px; letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .tagline { font-size: 11pt; color: #a8bbd0; font-weight: 300; }
+
+  /* ── HERO BAND ──────────────────────────────────────────── */
+  .hero {
+    background: var(--light);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 36px;
+    display: flex;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  .hero-text { flex: 1.3; }
+  .hero-text p { font-size: 9.5pt; color: #3a4f65; line-height: 1.65; }
+  .hero-text p strong { color: var(--navy); font-weight: 600; }
+  .hero-stats { flex: 0.8; display: flex; flex-direction: column; gap: 8px; }
+  .stat {
+    background: #fff; border: 1px solid var(--border);
+    border-left: 3px solid var(--gold); border-radius: 5px;
+    padding: 8px 12px;
+  }
+  .stat-val { font-size: 15pt; font-weight: 700; color: var(--green); line-height: 1; }
+  .stat-lbl { font-size: 7pt; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; }
+
+  /* ── SECTION TITLE ──────────────────────────────────────── */
+  .section { padding: 14px 36px; }
+  .sec-title {
+    font-size: 7pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--gold);
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .sec-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── PROBLEM / SOLUTION ─────────────────────────────────── */
+  .ps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ps-box { border-radius: 5px; padding: 12px 14px; }
+  .ps-box.prob { background: #fdf5f5; border: 1px solid #f0d4d4; }
+  .ps-box.sol  { background: #f3fbf7; border: 1px solid #c2e9d6; }
+  .ps-lbl {
+    font-size: 6.5pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; margin-bottom: 6px;
+  }
+  .ps-box.prob .ps-lbl { color: #c0392b; }
+  .ps-box.sol  .ps-lbl { color: #27ae60; }
+  .ps-box p { font-size: 8.5pt; color: #3a4f65; line-height: 1.6; }
+
+  /* ── FEATURE GRID ───────────────────────────────────────── */
+  .feat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .feat {
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 10px 12px; background: #fff;
+    display: flex; gap: 9px; align-items: flex-start;
+  }
+  .feat-icon {
+    width: 26px; height: 26px; border-radius: 5px;
+    background: var(--navy); display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; font-size: 12px;
+  }
+  .feat h4 { font-size: 8.5pt; font-weight: 600; color: var(--navy); margin-bottom: 2px; }
+  .feat p  { font-size: 7.5pt; color: var(--muted); line-height: 1.45; }
+
+  /* ── MODELS ROW ─────────────────────────────────────────── */
+  .models-row {
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+    padding: 10px 36px; background: var(--light);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .models-lbl { font-size: 7pt; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-right: 4px; }
+  .model-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 11px;
+    font-size: 8pt; font-weight: 500; color: var(--navy);
+  }
+  .mdot { width: 7px; height: 7px; border-radius: 50%; }
+  .c-claude  { background: #d4a843; }
+  .c-gpt     { background: #10a37f; }
+  .c-gemini  { background: #4285f4; }
+
+  /* ── FOOTER ─────────────────────────────────────────────── */
+  .footer {
+    background: var(--navy); padding: 12px 36px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: auto; flex-shrink: 0;
+  }
+  .footer-left { font-size: 7.5pt; color: #8fa3b8; }
+  .footer-left strong { color: #fff; font-weight: 600; }
+  .footer-cta {
+    background: var(--gold); color: var(--navy); font-size: 8.5pt;
+    font-weight: 700; padding: 7px 16px; border-radius: 4px;
+    text-decoration: none;
+  }
+  .footer-disc {
+    background: var(--navy); padding: 6px 36px;
+    font-size: 6pt; color: #4a6278; text-align: center; flex-shrink: 0;
+  }
+
+  /* ── PAGE 2: SCREENSHOTS ────────────────────────────────── */
+  .p2-header {
+    background: var(--navy); padding: 14px 36px;
+    border-bottom: 3px solid var(--gold); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .p2-header .brand { font-size: 14pt; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+  .p2-header .brand span { color: var(--gold); }
+  .p2-header .sub { font-size: 8pt; color: #8fa3b8; }
+
+  .screenshot-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 12px;
+    padding: 14px 36px;
+  }
+
+  .ss-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ss-card.wide {
+    grid-column: 1 / -1;
+  }
+
+  .ss-img {
+    width: 100%;
+    display: block;
+    object-fit: cover;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ss-card.wide .ss-img { max-height: 105px; object-position: top; }
+  .ss-card:not(.wide) .ss-img { max-height: 90px; object-position: top; }
+
+  .ss-cap {
+    padding: 8px 10px;
+    background: var(--light);
+  }
+
+  .ss-cap h4 { font-size: 8pt; font-weight: 600; color: var(--navy); margin-bottom: 2px; }
+  .ss-cap p  { font-size: 7pt; color: var(--muted); line-height: 1.4; }
+
+  /* ── HOW IT WORKS (p2) ──────────────────────────────────── */
+  .steps {
+    display: flex; gap: 0;
+    position: relative; padding: 0 36px 14px;
+  }
+  .steps::before {
+    content: '';
+    position: absolute; top: 17px;
+    left: 56px; right: 56px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    z-index: 0;
+  }
+  .step { flex: 1; text-align: center; position: relative; z-index: 1; padding: 0 5px; }
+  .step-n {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--navy); color: var(--gold);
+    font-size: 10pt; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 6px;
+    border: 2px solid var(--gold);
+  }
+  .step h4 { font-size: 8pt; font-weight: 600; color: var(--navy); margin-bottom: 2px; }
+  .step p  { font-size: 7pt; color: var(--muted); line-height: 1.4; }
+
+  /* ── DIFF CARDS (p2) ────────────────────────────────────── */
+  .diff-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 10px; padding: 0 36px 14px;
+  }
+  .diff-card {
+    background: var(--navy); border-radius: 6px;
+    padding: 12px 13px; text-align: center;
+  }
+  .diff-card .dicon { font-size: 16px; margin-bottom: 5px; }
+  .diff-card h4 { font-size: 7.5pt; font-weight: 600; color: var(--gold); margin-bottom: 4px; }
+  .diff-card p  { font-size: 7pt; color: #8fa3b8; line-height: 1.45; }
+
+  /* ── DIVIDER ────────────────────────────────────────────── */
+  .div { height: 1px; background: var(--border); margin: 0 36px; }
+
+  /* ── PRINT ──────────────────────────────────────────────── */
+  @page { size: A4; margin: 0; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { margin: 0; break-after: page; }
+    .page + .page { margin-top: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════ PAGE 1 ══════ -->
+<div class="page">
+
+  <div class="header">
+    <div class="wordmark">
+      <div class="wordmark-name">Quorum</div>
+      <div class="wordmark-badge">AI Research Platform</div>
+    </div>
+    <div class="tagline">Three AI minds. One consensus portfolio.</div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-text">
+      <p>
+        <strong>Quorum is an AI-powered investment committee</strong> that brings together Claude, GPT-4o,
+        and Gemini as independent research analysts. Each model screens the market, builds a macro thesis,
+        and nominates picks with conviction — then Quorum synthesizes a consensus portfolio weighted by
+        cross-member agreement. The result: institutional-depth research, on demand, without the headcount.
+      </p>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-val">+43.7%</div>
+        <div class="stat-lbl">Portfolio return (1-year)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">vs +29.4%</div>
+        <div class="stat-lbl">S&amp;P 500 over same period</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">3 models</div>
+        <div class="stat-lbl">Independent AI perspectives</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" style="padding-bottom: 10px;">
+    <div class="sec-title">The Challenge</div>
+    <div class="ps-grid">
+      <div class="ps-box prob">
+        <div class="ps-lbl">The Problem</div>
+        <p>Serious investors need more than a single AI chatbot or data feed. Research takes hours. Conviction is hard to calibrate. And a single perspective — human or AI — carries blind spots that only surface when it's too late.</p>
+      </div>
+      <div class="ps-box sol">
+        <div class="ps-lbl">The Solution</div>
+        <p>Quorum runs three frontier models as independent committee members, each doing its own research with no visibility into what the others are doing. Where they agree, conviction is high. Where they diverge, you see the debate.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="div"></div>
+
+  <div class="section">
+    <div class="sec-title">What You Get</div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">📊</div>
+        <div>
+          <h4>Consensus Portfolio</h4>
+          <p>A treemap of 10–20 core positions plus moonshots, allocation-weighted by cross-member conviction. Unanimous picks get 3× the weight of solo nominations.</p>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🔍</div>
+        <div>
+          <h4>Stock Advisor</h4>
+          <p>Type any ticker for a structured buy / watch / pass verdict from each committee member — including investment thesis, analyst targets, and philosophy fit.</p>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">📈</div>
+        <div>
+          <h4>Benchmark Performance</h4>
+          <p>Rolling 1-year return vs. SPY, VGT, and VTI. Know exactly how the committee's picks are performing against the indices you care about.</p>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🎛️</div>
+        <div>
+          <h4>Live Exclusion Controls</h4>
+          <p>Filter any ticker or sector instantly without re-running the committee. Raw picks are preserved — exclusions apply at read time and are fully reversible.</p>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🗂️</div>
+        <div>
+          <h4>Full Run History</h4>
+          <p>Every session is persisted immutably. Compare any two runs side-by-side to track how conviction has shifted as market conditions evolve.</p>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">⚡</div>
+        <div>
+          <h4>Parallel Research Engine</h4>
+          <p>All three models research concurrently. A full committee run — macro analysis, universe screening, picks generation — completes in minutes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="models-row">
+    <span class="models-lbl">Powered by</span>
+    <div class="model-pill"><div class="mdot c-claude"></div> Claude (Anthropic)</div>
+    <div class="model-pill"><div class="mdot c-gpt"></div> GPT-4o (OpenAI)</div>
+    <div class="model-pill"><div class="mdot c-gemini"></div> Gemini (Google)</div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      <strong>Quorum</strong> — AI Investment Committee Platform<br>
+      Early access available · Contact us to schedule a demo
+    </div>
+    <a class="footer-cta" href="#">Request Demo →</a>
+  </div>
+  <div class="footer-disc">
+    Past performance does not guarantee future results. Quorum is a research and decision-support tool. Not financial advice.
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════ PAGE 2 ══════ -->
+<div class="page">
+
+  <div class="p2-header">
+    <div>
+      <div class="brand">Quorum <span>·</span> See It In Action</div>
+    </div>
+    <div class="sub">From research to portfolio in minutes</div>
+  </div>
+
+  <div class="screenshot-grid">
+    <div class="ss-card wide">
+      <img class="ss-img" src="screenshots/portfolio-treemap.png" alt="Portfolio treemap">
+      <div class="ss-cap">
+        <h4>Consensus Portfolio — Allocation Map</h4>
+        <p>Treemap weighted by cross-member conviction. Three-way consensus picks (green border) receive the highest allocation. Moonshots are isolated in a separate band so they never dominate the portfolio structure.</p>
+      </div>
+    </div>
+    <div class="ss-card">
+      <img class="ss-img" src="screenshots/members.png" alt="Committee members">
+      <div class="ss-cap">
+        <h4>Committee Members — Independent Views</h4>
+        <p>Each model's picks displayed side-by-side. Overlapping positions surface immediately, and each member's variant perception thesis is a click away.</p>
+      </div>
+    </div>
+    <div class="ss-card">
+      <img class="ss-img" src="screenshots/performance.png" alt="Performance chart">
+      <div class="ss-cap">
+        <h4>Performance — vs. SPY, VGT, VTI</h4>
+        <p>Rolling 1-year cumulative return with summary metric cards. The committee's portfolio returned +43.7% vs. SPY's +29.4% over the same period.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="div"></div>
+
+  <div class="section" style="padding-bottom: 10px;">
+    <div class="sec-title">How It Works</div>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-n">1</div>
+      <h4>Independent Research</h4>
+      <p>Each model screens the universe and builds a macro thesis — no visibility into what the others are doing.</p>
+    </div>
+    <div class="step">
+      <div class="step-n">2</div>
+      <h4>Committee Picks</h4>
+      <p>Each member nominates core positions and moonshots with conviction levels and variant perception theses.</p>
+    </div>
+    <div class="step">
+      <div class="step-n">3</div>
+      <h4>Consensus Weighting</h4>
+      <p>Solo picks get 1×. Two-of-three agreement gets 2×. Unanimous conviction gets 3× portfolio weight.</p>
+    </div>
+    <div class="step">
+      <div class="step-n">4</div>
+      <h4>Actionable Portfolio</h4>
+      <p>Weights summing to 100%, analyst targets, and recommended dollar allocations — ready to deploy.</p>
+    </div>
+  </div>
+
+  <div class="div"></div>
+
+  <div class="section" style="padding-bottom: 12px;">
+    <div class="sec-title">Why Quorum Is Different</div>
+  </div>
+  <div class="diff-grid">
+    <div class="diff-card">
+      <div class="dicon">🧠</div>
+      <h4>Model Diversity by Design</h4>
+      <p>Claude, GPT, and Gemini have different training data and reasoning tendencies. Where they disagree, the debate is signal — not noise.</p>
+    </div>
+    <div class="diff-card">
+      <div class="dicon">🎯</div>
+      <h4>Philosophy-Aligned</h4>
+      <p>Growth bias, ESG-lite criteria, and configurable sector exclusions. The committee works within your investment mandate from day one.</p>
+    </div>
+    <div class="diff-card">
+      <div class="dicon">🔒</div>
+      <h4>Bounded Risk Exposure</h4>
+      <p>Moonshots are structurally capped at a lower base weight. High-conviction bets are isolated and never dominate — even at full consensus.</p>
+    </div>
+  </div>
+
+  <div class="footer" style="margin-top: auto;">
+    <div class="footer-left">
+      <strong>Quorum</strong> — AI Investment Committee Platform<br>
+      Early access available · quorum.ai
+    </div>
+    <a class="footer-cta" href="#">Request Demo →</a>
+  </div>
+  <div class="footer-disc">
+    Past performance does not guarantee future results. Quorum is a research and decision-support tool. All investment decisions remain the sole responsibility of the user. Not financial advice.
+  </div>
+
+</div>
+</body>
+</html>
