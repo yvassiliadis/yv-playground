@@ -13,12 +13,14 @@ import anthropic
 
 from src import advisor_log
 from src import config as exclusions
+from src import demo
 from src.advisor import ask_committee
 from src.performance import portfolio_vs_benchmarks
 from src.runner import load_all_runs, load_latest_run, run_committee
 
 load_dotenv()
 exclusions.load()
+demo.ensure_demo_data()
 
 app = FastAPI()
 
@@ -26,6 +28,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def _clients():
+    if demo.is_demo_mode():
+        raise HTTPException(
+            status_code=503,
+            detail=f"Demo mode: add {', '.join(demo._REQUIRED_KEYS)} to .env to enable live AI runs",
+        )
     return (
         anthropic.AsyncAnthropic(),
         AsyncOpenAI(),
