@@ -31,7 +31,7 @@
       "ticker": "MSFT",
       "company_name": "Microsoft Corp",
       "rationale": "Azure cloud + Office Copilot upsell creates a durable margin flywheel. Strong FCF and reasonable forward multiple given growth trajectory. One of the cleanest ways to own the AI transition with lower execution risk than pure-play names.",
-      "conviction": "high",
+      "conviction": "core",
       "member": "gpt",
       "variant_perception": "Consensus underestimates Copilot attach rates in enterprise — early renewal data suggests AI seat upsell is stickier than legacy software expansions, pointing to durable ARPU expansion through the decade.",
       "current_price": null,

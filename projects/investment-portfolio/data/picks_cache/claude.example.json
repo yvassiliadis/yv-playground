@@ -31,7 +31,7 @@
       "ticker": "AMZN",
       "company_name": "Amazon.com Inc",
       "rationale": "AWS is re-accelerating as enterprises shift from cost-optimization mode back to AI-driven cloud expansion. The retail segment provides a free option on advertising growth and logistics efficiency. FCF generation is substantial and underappreciated.",
-      "conviction": "high",
+      "conviction": "core",
       "member": "claude",
       "variant_perception": "Street models underweight the magnitude of AWS margin expansion as AI workloads carry higher ASPs than legacy cloud, and advertising's take rate on the commerce flywheel continues to expand with minimal incremental cost.",
       "current_price": null,

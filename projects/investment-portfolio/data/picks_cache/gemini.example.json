@@ -31,7 +31,7 @@
       "ticker": "AAPL",
       "company_name": "Apple Inc",
       "rationale": "Apple Intelligence integration across its installed base of 2B+ devices creates a new AI monetization surface. Services segment continues to compound at high margins. The brand moat and ecosystem lock-in remain unmatched in consumer technology.",
-      "conviction": "high",
+      "conviction": "core",
       "member": "gemini",
       "variant_perception": "Street underestimates Apple's ability to monetize AI features through premium tiers and subscription expansion, treating it as a hardware company when the margin profile increasingly resembles a software business.",
       "current_price": null,
