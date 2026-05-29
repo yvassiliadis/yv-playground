@@ -6,7 +6,22 @@ Built as a showcase of how I use LLMs iteratively to ship a real product. See [`
 
 ## Screenshots
 
-<!-- TODO: add screenshots once sandbox is set up -->
+**Portfolio** — treemap weighted by cross-member conviction, with upside-to-target signal strip
+
+![Portfolio treemap](docs/screenshots/portfolio-treemap.png)
+![Portfolio signals](docs/screenshots/portfolio-signals.png)
+
+**Stock detail** — per-ticker drawer with committee takes, analyst consensus, and recommended allocation
+
+![Stock detail drawer](docs/screenshots/portfolio-drawer.png)
+
+**Performance** — portfolio vs. SPY / VGT / VTI over a rolling 1-year window
+
+![Performance chart](docs/screenshots/performance.png)
+
+**Committee members** — each model's independent picks with conviction and variant perception
+
+![Committee members](docs/screenshots/members.png)
 
 ## What it does
 
