@@ -1,0 +1,42 @@
+:root {
+  /* Surfaces */
+  --bg:             #0c0a07;
+  --surface:        #16130e;
+  --surface-2:      #1e1a13;
+  --surface-3:      #252018;
+  --border:         #2a2218;
+  --border-bright:  #3d3020;
+
+  /* Accent: amber (core) */
+  --amber:          #d4a027;
+  --amber-dim:      rgba(212,160,39,0.12);
+  --amber-glow:     rgba(212,160,39,0.30);
+  --amber-tile-bg:  #1e1a12;
+  --amber-tile-bg2: #272114;
+
+  /* Accent: purple (moonshot) */
+  --purple:         #9d7ff5;
+  --purple-dim:     rgba(157,127,245,0.12);
+  --purple-glow:    rgba(157,127,245,0.28);
+  --purple-tile-bg: #14101e;
+  --purple-tile-bg2:#1e1530;
+
+  /* Semantic */
+  --green:          #22c55e;
+  --green-dim:      rgba(34,197,94,0.12);
+  --green-glow:     rgba(34,197,94,0.35);
+  --red:            #ef4444;
+  --red-dim:        rgba(239,68,68,0.12);
+  --red-glow:       rgba(239,68,68,0.30);
+
+  /* Text scale */
+  --text:           #f0e6cc;
+  --text-2:         #c4b49a;
+  --text-3:         #9a8e78;
+  --text-4:         #7a6e5c;
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-mono:  'IBM Plex Mono', 'Courier New', monospace;
+  --font-sans:  'IBM Plex Sans', system-ui, sans-serif;
+}

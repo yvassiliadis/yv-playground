@@ -38,3 +38,11 @@ dist/
 build/
 .next/
 coverage/
+
+# --- Python build artifacts ---
+wheels/
+*.egg-info
+
+# --- IDE ---
+.idea/
+.vscode/

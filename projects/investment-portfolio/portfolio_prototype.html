@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Atlas</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:             #0c0a07;
+  --surface:        #16130e;
+  --surface-2:      #1e1a13;
+  --surface-3:      #252018;
+  --border:         #2a2218;
+  --border-bright:  #3d3020;
+
+  --amber:          #d4a027;
+  --amber-dim:      rgba(212,160,39,0.12);
+  --amber-glow:     rgba(212,160,39,0.30);
+  --amber-tile-bg:  #1e1a12;
+  --amber-tile-bg2: #272114;
+
+  --purple:         #9d7ff5;
+  --purple-dim:     rgba(157,127,245,0.12);
+  --purple-glow:    rgba(157,127,245,0.28);
+  --purple-tile-bg: #14101e;
+  --purple-tile-bg2:#1e1530;
+
+  --green:          #22c55e;
+  --green-dim:      rgba(34,197,94,0.12);
+  --green-glow:     rgba(34,197,94,0.35);
+
+  --red:            #ef4444;
+  --red-dim:        rgba(239,68,68,0.12);
+
+  --text:           #f0e6cc;
+  --text-2:         #c4b49a;
+  --text-3:         #9a8e78;
+  --text-4:         #7a6e5c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans', sans-serif;
+  min-height: 100vh;
+}
+
+/* Warm vignette */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(212,160,39,0.03) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.header {
+  position: relative;
+  z-index: 1;
+  padding: 36px 48px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.header-eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.header-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  line-height: 1;
+}
+
+.header-title em {
+  font-style: italic;
+  color: var(--amber);
+}
+
+.header-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-4);
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+}
+
+.header-stats {
+  display: flex;
+  gap: 32px;
+  align-items: flex-end;
+  padding-bottom: 2px;
+}
+
+.stat {
+  text-align: right;
+}
+
+.stat-val {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--amber);
+}
+
+.stat-val.green { color: var(--green); }
+
+.stat-label {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  margin-top: 4px;
+}
+
+/* ── Main ────────────────────────────────────────────────────────────────────── */
+.main {
+  position: relative;
+  z-index: 1;
+  padding: 36px 48px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+
+/* ── Section label ────────────────────────────────────────────────────────────*/
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  white-space: nowrap;
+}
+
+.section-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.section-legend {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--text-4);
+  letter-spacing: 0.04em;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* ── Treemap ──────────────────────────────────────────────────────────────────*/
+.treemap-container {
+  width: 100%;
+  height: 500px;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.tile {
+  position: absolute;
+  padding: 2px;
+}
+
+.tile-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  padding: 14px 14px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  position: relative;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.tile-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+
+.tile:hover .tile-inner::after { opacity: 1; }
+.tile:hover .tile-inner { filter: brightness(1.12); }
+.tile:active .tile-inner { transform: scale(0.99); }
+
+/* Core tiles */
+.tile.core .tile-inner {
+  background: linear-gradient(145deg, var(--amber-tile-bg) 0%, var(--amber-tile-bg2) 100%);
+  border: 1px solid #3a2e1a;
+}
+
+/* Moonshot tiles */
+.tile.moonshot .tile-inner {
+  background: linear-gradient(145deg, var(--purple-tile-bg) 0%, var(--purple-tile-bg2) 100%);
+  border: 1px solid #2e1e56;
+}
+
+/* Consensus glow */
+.tile.core.c1 .tile-inner   { box-shadow: inset 0 0 0 1px rgba(212,160,39,0.10); }
+.tile.core.c2 .tile-inner   { box-shadow: inset 0 0 0 1px rgba(212,160,39,0.35), 0 0 14px rgba(212,160,39,0.06); }
+.tile.core.c3 .tile-inner   { box-shadow: inset 0 0 0 1.5px rgba(34,197,94,0.55), 0 0 20px rgba(34,197,94,0.10); }
+.tile.moonshot.c2 .tile-inner { box-shadow: inset 0 0 0 1px rgba(157,127,245,0.45), 0 0 14px rgba(157,127,245,0.08); }
+
+/* Tile content */
+.tile-ticker {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.tile-company {
+  font-size: 0.67rem;
+  color: var(--text-3);
+  line-height: 1.35;
+  margin-top: 3px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tile-dots {
+  display: flex;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot.claude  { background: #f59e0b; }
+.dot.gpt     { background: #10b981; }
+.dot.gemini  { background: #3b82f6; }
+
+.tile-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 6px;
+}
+
+.tile-weight {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  color: var(--amber);
+  line-height: 1;
+}
+.tile.moonshot .tile-weight { color: var(--purple); }
+
+.tile-upside {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.tile-upside.pos { color: var(--green); }
+.tile-upside.neg { color: var(--red); }
+
+/* Size variants */
+.tile.sz-sm .tile-company { display: none; }
+.tile.sz-sm .tile-dots    { display: none; }
+.tile.sz-xs .tile-company { display: none; }
+.tile.sz-xs .tile-dots    { display: none; }
+.tile.sz-xs .tile-bottom  { display: none; }
+.tile.sz-xs .tile-ticker  { font-size: 0.78rem !important; }
+
+/* Entry animation */
+.tile { animation: tileIn 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes tileIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Signal strip ─────────────────────────────────────────────────────────────*/
+.signal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.signal-col {
+  padding: 24px 28px;
+}
+
+.signal-col:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.signal-col-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--text-2);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.col-marker {
+  width: 3px;
+  height: 16px;
+  border-radius: 1.5px;
+  flex-shrink: 0;
+}
+.col-marker.core     { background: var(--amber); }
+.col-marker.moonshot { background: var(--purple); }
+
+.signal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: padding 0.1s, background 0.1s;
+  border-radius: 0;
+  margin: 0;
+}
+
+.signal-item:last-child { border-bottom: none; }
+
+.signal-item:hover {
+  padding: 9px 10px;
+  margin: 0 -10px;
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+
+.signal-rank {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--text-4);
+  width: 14px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.signal-ticker {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  width: 48px;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+
+.signal-bar-track {
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  border-radius: 1.5px;
+  overflow: hidden;
+}
+
+.signal-bar-fill {
+  height: 100%;
+  border-radius: 1.5px;
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.signal-bar-fill.core     { background: linear-gradient(90deg, var(--amber-dim), var(--amber)); }
+.signal-bar-fill.moonshot { background: linear-gradient(90deg, var(--purple-dim), var(--purple)); }
+
+.signal-pct {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.signal-pct.pos { color: var(--green); }
+.signal-pct.neg { color: var(--red); }
+
+.signal-weight {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-4);
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Drawer ───────────────────────────────────────────────────────────────────*/
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+  backdrop-filter: blur(2px);
+}
+
+.backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  background: var(--surface);
+  border-left: 1px solid var(--border-bright);
+  z-index: 201;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.drawer.open { transform: translateX(0); }
+
+.drawer-top-bar {
+  height: 4px;
+  flex-shrink: 0;
+}
+.drawer-top-bar.core     { background: linear-gradient(90deg, var(--amber), transparent); }
+.drawer-top-bar.moonshot { background: linear-gradient(90deg, var(--purple), transparent); }
+
+.drawer-header {
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.drawer-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 30px;
+  height: 30px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-3);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, border-color 0.15s;
+  line-height: 1;
+  padding-bottom: 1px;
+}
+.drawer-close:hover { color: var(--text); border-color: var(--border-bright); }
+
+.drawer-ticker {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 2.1rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.drawer-company {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+.drawer-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.pill.core     { color: var(--amber);  background: var(--amber-dim);  border: 1px solid var(--amber-glow);  }
+.pill.moonshot { color: var(--purple); background: var(--purple-dim); border: 1px solid var(--purple-glow); }
+.pill.weight   { color: var(--text-2); background: var(--surface-3);  border: 1px solid var(--border-bright); }
+.pill.consensus{ color: var(--green);  background: var(--green-dim);  border: 1px solid var(--green-glow);  }
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px 32px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bright) transparent;
+}
+
+.drawer-body::-webkit-scrollbar { width: 3px; }
+.drawer-body::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 1.5px; }
+
+.drawer-section { margin-bottom: 24px; }
+
+.drawer-section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  margin-bottom: 10px;
+}
+
+.upside-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.upside-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.upside-card-label {
+  font-size: 0.67rem;
+  color: var(--text-3);
+  margin-bottom: 5px;
+}
+
+.upside-card-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.upside-card-val.pos { color: var(--green); }
+.upside-card-val.neg { color: var(--red);   }
+
+.member-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.member-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.member-chip .dot { width: 7px; height: 7px; }
+
+.rationale {
+  font-size: 0.84rem;
+  line-height: 1.8;
+  color: var(--text-2);
+}
+
+/* ── Animate signal bars on load ─────────────────────────────────────────────*/
+.signal-bar-fill { width: 0; }
+.signal-bar-fill.loaded { /* width set inline after load */ }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div>
+    <div class="header-eyebrow">Investment Committee</div>
+    <h1 class="header-title">Portfolio <em>Atlas</em></h1>
+    <div class="header-meta">Last run · May 27, 2026 at 14:32 UTC</div>
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <span class="stat-val" id="stat-holdings">12</span>
+      <span class="stat-label">Holdings</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val green" id="stat-upside">—</span>
+      <span class="stat-label">Wtd. Upside</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="stat-consensus">—</span>
+      <span class="stat-label">3-way Picks</span>
+    </div>
+  </div>
+</header>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Treemap -->
+  <section class="treemap-section">
+    <div class="section-header">
+      <span class="section-label">Allocation Map</span>
+      <div class="section-rule"></div>
+      <div class="section-legend">
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#272114; border:1px solid #d4a027;"></div>
+          Core
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#1e1530; border:1px solid #9d7ff5;"></div>
+          Moonshot
+        </div>
+        <div class="legend-item" style="gap:4px;">
+          <span class="dot claude" style="width:7px;height:7px;"></span>
+          <span class="dot gpt" style="width:7px;height:7px;"></span>
+          <span class="dot gemini" style="width:7px;height:7px;"></span>
+          &nbsp;3-way = green border
+        </div>
+      </div>
+    </div>
+    <div class="treemap-container" id="treemap"></div>
+  </section>
+
+  <!-- Signal strip -->
+  <section class="signal-section">
+    <div class="section-header">
+      <span class="section-label">Upside Opportunity</span>
+      <div class="section-rule"></div>
+      <span class="section-label" style="white-space:nowrap;">analyst consensus target vs. current price</span>
+    </div>
+    <div class="signal-grid">
+      <div class="signal-col">
+        <div class="signal-col-title">
+          <div class="col-marker core"></div>
+          Core Positions
+        </div>
+        <div id="core-list"></div>
+      </div>
+      <div class="signal-col">
+        <div class="signal-col-title">
+          <div class="col-marker moonshot"></div>
+          Moonshot Positions
+        </div>
+        <div id="moon-list"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Drawer -->
+<div class="backdrop" id="backdrop"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-top-bar" id="d-bar"></div>
+  <div class="drawer-header">
+    <button class="drawer-close" id="d-close">×</button>
+    <div class="drawer-ticker" id="d-ticker"></div>
+    <div class="drawer-company" id="d-company"></div>
+    <div class="drawer-pills" id="d-pills"></div>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-section">
+      <div class="drawer-section-label">Upside to Target</div>
+      <div class="upside-row" id="d-upside"></div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Committee Members</div>
+      <div class="member-list" id="d-members"></div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Investment Thesis</div>
+      <div class="rationale" id="d-rationale"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ───────────────────────────────────────────────────────────────────────
+
+const holdings = [
+  {
+    ticker: "NVDA", company: "NVIDIA Corporation",
+    conviction: "core", weight: 18, upside: 24.3, upside_med: 21.5,
+    members: ["claude","gpt","gemini"],
+    rationale: "NVIDIA's data center GPU dominance remains unassailable as AI training workloads scale exponentially. Blackwell architecture represents a step-function improvement in throughput per watt. Supply is the binding constraint — a backlog extending 12+ months is a pricing floor, not a ceiling. The variant perception: Blackwell ASP is 40% higher than consensus models assume, making near-term estimates structurally too low."
+  },
+  {
+    ticker: "META", company: "Meta Platforms Inc.",
+    conviction: "core", weight: 15, upside: 31.2, upside_med: 28.8,
+    members: ["claude","gpt","gemini"],
+    rationale: "Reality Labs losses are masking extraordinary advertising platform monetization. Llama-driven AI features are inflecting engagement — daily active users up 7% YoY with no meaningful competitor for social graph depth. The capex cycle skeptics are wrong: infrastructure build is becoming their moat, not a liability. Threads monetization is unmodeled upside."
+  },
+  {
+    ticker: "MSFT", company: "Microsoft Corporation",
+    conviction: "core", weight: 14, upside: 18.7, upside_med: 17.2,
+    members: ["claude","gpt"],
+    rationale: "Azure is the enterprise AI landing zone and Copilot seat growth is accelerating faster than consensus expects. Office 365 ARPU expansion via AI features represents a second monetization wave on a 400M-user installed base. Valuation premium over peers is deserved given recurring revenue quality and switching costs in enterprise IT."
+  },
+  {
+    ticker: "AMZN", company: "Amazon.com Inc.",
+    conviction: "core", weight: 12, upside: 22.1, upside_med: 20.4,
+    members: ["gpt","gemini"],
+    rationale: "AWS re-acceleration is underappreciated by the market. AI workloads are driving the highest-margin compute categories and Bedrock is emerging as a credible model aggregation layer. Retail segment EBIT margins have permanently repriced upward on logistics cost optimization. Advertising is now a $50B+ business growing 25% annually."
+  },
+  {
+    ticker: "GOOGL", company: "Alphabet Inc.",
+    conviction: "core", weight: 10, upside: 15.4, upside_med: 14.1,
+    members: ["claude","gemini"],
+    rationale: "Search monetization fears are overstated — AI Overviews are expanding total query volume, not cannibalizing it. YouTube connected TV revenue is a dark horse growing 35% YoY. Waymo optionality is currently unpriced at this multiple. The market is not correctly valuing Google DeepMind's research output or its monetization path."
+  },
+  {
+    ticker: "CRM", company: "Salesforce Inc.",
+    conviction: "core", weight: 8, upside: 19.8, upside_med: 18.3,
+    members: ["claude"],
+    rationale: "Agentforce represents the first genuine enterprise AI product commanding premium pricing above the legacy seat model. AI budgets are routing through Salesforce's existing IT relationships. Profitability trajectory is ahead of consensus with operating leverage finally materializing after years of margin-dilutive investment."
+  },
+  {
+    ticker: "ORCL", company: "Oracle Corporation",
+    conviction: "core", weight: 7, upside: 12.3, upside_med: 11.0,
+    members: ["gpt"],
+    rationale: "OCI's multi-cloud AI infrastructure buildout is attracting sovereign and enterprise workloads that AWS and Azure cannot capture for regulatory reasons. Autonomous Database adoption is understated in sellside models. Healthcare vertical expansion provides durable non-cyclical revenue insulation against macro softness."
+  },
+  {
+    ticker: "PLTR", company: "Palantir Technologies",
+    conviction: "moonshot", weight: 6, upside: 67.2, upside_med: 55.0,
+    members: ["claude","gpt"],
+    rationale: "AIP platform is converting trial customers to production deployments at an accelerating rate. US commercial revenue is the critical metric — the government base provides a floor but commercial is the multiple driver. The variant perception: most analysts undercount operational AI use cases that aren't LLM wrappers. Rule-of-40 trajectory puts PLTR in elite SaaS company territory within 18 months."
+  },
+  {
+    ticker: "SMCI", company: "Super Micro Computer Inc.",
+    conviction: "moonshot", weight: 4, upside: 88.5, upside_med: 72.0,
+    members: ["gemini"],
+    rationale: "Liquid-cooled rack systems are becoming the de facto standard for dense GPU clusters — SMCI is 18 months ahead of Dell and HPE on thermal architecture. Audit remediation overhang is clearing and revenue recognition is normalizing. A direct play on the data center infrastructure buildout without NVIDIA's valuation premium."
+  },
+  {
+    ticker: "SOUN", company: "SoundHound AI Inc.",
+    conviction: "moonshot", weight: 3, upside: 145.0, upside_med: 110.0,
+    members: ["claude"],
+    rationale: "Voice AI monetization in automotive and restaurant verticals is inflecting. The NVIDIA partnership provides distribution and credibility. A highly speculative position on voice becoming the dominant human-computer interface in embedded systems over the next decade. Extreme binary outcome: either this is a dominant platform or it's zero."
+  },
+  {
+    ticker: "RXRX", company: "Recursion Pharmaceuticals",
+    conviction: "moonshot", weight: 3, upside: 112.3, upside_med: 88.0,
+    members: ["gpt"],
+    rationale: "The AI drug discovery thesis requires a 5-year horizon but Recursion's phenomics platform holds the most defensible proprietary dataset in the space. The NVIDIA partnership validates the technical approach. Pipeline entering Phase 2 represents the first real clinical proof points for this model. A bet on fundamental biotech transformation, not incremental efficiency."
+  },
+  {
+    ticker: "BBAI", company: "BigBear.ai Holdings",
+    conviction: "moonshot", weight: 3, upside: 93.1, upside_med: 70.0,
+    members: ["gemini"],
+    rationale: "Defense AI spending is entering a multi-year acceleration cycle and BBAI has privileged access to classified compute environments that commercial AI vendors cannot touch. A speculative position on the government AI infrastructure buildout theme. Significant execution risk on contract conversions to recurring revenue."
+  },
+];
+
+// ── Stats ──────────────────────────────────────────────────────────────────────
+
+const wtdUpside = holdings.reduce((s, h) => s + h.upside * h.weight / 100, 0);
+document.getElementById('stat-upside').textContent = `+${wtdUpside.toFixed(1)}%`;
+document.getElementById('stat-consensus').textContent = holdings.filter(h => h.members.length === 3).length;
+document.getElementById('stat-holdings').textContent = holdings.length;
+
+// ── Squarify algorithm ────────────────────────────────────────────────────────
+
+function squarify(items, x0, y0, x1, y1) {
+  const totalArea = (x1 - x0) * (y1 - y0);
+  const totalWeight = items.reduce((s, d) => s + d.weight, 0);
+
+  const nodes = items.slice()
+    .sort((a, b) => b.weight - a.weight)
+    .map(d => ({ ...d, _a: (d.weight / totalWeight) * totalArea }));
+
+  const rects = [];
+
+  function worst(row, stripLen) {
+    if (!row.length) return Infinity;
+    const s = row.reduce((acc, d) => acc + d._a, 0);
+    const rMax = Math.max(...row.map(d => d._a));
+    const rMin = Math.min(...row.map(d => d._a));
+    return Math.max(stripLen * stripLen * rMax / (s * s), s * s / (stripLen * stripLen * rMin));
+  }
+
+  function layout(nodes, x0, y0, x1, y1) {
+    if (!nodes.length) return;
+
+    const w = x1 - x0, h = y1 - y0;
+
+    if (nodes.length === 1) {
+      rects.push({ data: nodes[0], x: x0, y: y0, w, h });
+      return;
+    }
+
+    const isWide = w >= h;
+    const stripLen = isWide ? w : h;
+
+    let row = [];
+    let i = 0;
+    while (i < nodes.length) {
+      const cand = [...row, nodes[i]];
+      if (!row.length || worst(cand, stripLen) <= worst(row, stripLen)) {
+        row.push(nodes[i]);
+        i++;
+      } else {
+        break;
+      }
+    }
+
+    const rowArea = row.reduce((s, d) => s + d._a, 0);
+    const thick   = rowArea / stripLen;
+    let offset = 0;
+
+    row.forEach(d => {
+      const len = (d._a / rowArea) * stripLen;
+      if (isWide) {
+        rects.push({ data: d, x: x0 + offset, y: y0, w: len, h: thick });
+      } else {
+        rects.push({ data: d, x: x0, y: y0 + offset, w: thick, h: len });
+      }
+      offset += len;
+    });
+
+    const rem = nodes.slice(row.length);
+    if (rem.length) {
+      if (isWide) layout(rem, x0, y0 + thick, x1, y1);
+      else         layout(rem, x0 + thick, y0, x1, y1);
+    }
+  }
+
+  layout(nodes, x0, y0, x1, y1);
+  return rects;
+}
+
+// ── Treemap render ─────────────────────────────────────────────────────────────
+
+function renderTreemap() {
+  const container = document.getElementById('treemap');
+  const W = container.offsetWidth;
+  const H = container.offsetHeight;
+  if (!W || !H) return;
+
+  const rects = squarify(holdings, 0, 0, W, H);
+  container.innerHTML = '';
+
+  rects.forEach((r, idx) => {
+    const d = r.data;
+    const GAP = 3;
+    const area = r.w * r.h;
+
+    const tile = document.createElement('div');
+    tile.className = `tile ${d.conviction} c${d.members.length}`;
+    if (area < 7000)  tile.classList.add('sz-sm');
+    if (area < 3500)  tile.classList.add('sz-xs');
+
+    tile.style.left   = `${r.x + GAP / 2}px`;
+    tile.style.top    = `${r.y + GAP / 2}px`;
+    tile.style.width  = `${r.w - GAP}px`;
+    tile.style.height = `${r.h - GAP}px`;
+    tile.style.animationDelay = `${idx * 28}ms`;
+
+    const fs = Math.min(1.15, Math.max(0.78, r.w / 90)) + 'rem';
+    const wfs = Math.min(1.0, Math.max(0.72, r.w / 120)) + 'rem';
+    const uCls = d.upside >= 0 ? 'pos' : 'neg';
+    const uSign = d.upside >= 0 ? '+' : '';
+
+    const dotsHtml = d.members
+      .map(m => `<div class="dot ${m}"></div>`)
+      .join('');
+
+    tile.innerHTML = `
+      <div class="tile-inner">
+        <div class="tile-top">
+          <div class="tile-ticker" style="font-size:${fs}">${d.ticker}</div>
+          <div class="tile-company">${d.company}</div>
+          <div class="tile-dots">${dotsHtml}</div>
+        </div>
+        <div class="tile-bottom">
+          <span class="tile-weight" style="font-size:${wfs}">${d.weight}%</span>
+          <span class="tile-upside ${uCls}">${uSign}${d.upside}%</span>
+        </div>
+      </div>`;
+
+    tile.addEventListener('click', () => openDrawer(d));
+    container.appendChild(tile);
+  });
+}
+
+// ── Signal strip ───────────────────────────────────────────────────────────────
+
+function renderSignal() {
+  function buildList(items, elId, type) {
+    const maxU = Math.max(...items.map(h => Math.abs(h.upside)));
+    const sorted = items.slice().sort((a, b) => b.upside - a.upside);
+
+    document.getElementById(elId).innerHTML = sorted.map((h, i) => {
+      const uCls  = h.upside >= 0 ? 'pos' : 'neg';
+      const uSign = h.upside >= 0 ? '+' : '';
+      const barPct = (Math.abs(h.upside) / maxU * 100).toFixed(1);
+      return `
+        <div class="signal-item" data-ticker="${h.ticker}">
+          <span class="signal-rank">${i + 1}</span>
+          <span class="signal-ticker">${h.ticker}</span>
+          <div class="signal-bar-track">
+            <div class="signal-bar-fill ${type}" data-pct="${barPct}"></div>
+          </div>
+          <span class="signal-pct ${uCls}">${uSign}${h.upside}%</span>
+          <span class="signal-weight">${h.weight}%</span>
+        </div>`;
+    }).join('');
+
+    // Click handlers
+    document.getElementById(elId).querySelectorAll('.signal-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const h = holdings.find(x => x.ticker === el.dataset.ticker);
+        if (h) openDrawer(h);
+      });
+    });
+
+    // Animate bars after a frame
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(elId).querySelectorAll('.signal-bar-fill').forEach(bar => {
+          bar.style.width = bar.dataset.pct + '%';
+        });
+      });
+    });
+  }
+
+  buildList(holdings.filter(h => h.conviction === 'core'),     'core-list', 'core');
+  buildList(holdings.filter(h => h.conviction === 'moonshot'), 'moon-list', 'moonshot');
+}
+
+// ── Drawer ─────────────────────────────────────────────────────────────────────
+
+function openDrawer(d) {
+  // Accent bar
+  const bar = document.getElementById('d-bar');
+  bar.className = `drawer-top-bar ${d.conviction}`;
+
+  document.getElementById('d-ticker').textContent  = d.ticker;
+  document.getElementById('d-company').textContent = d.company;
+
+  // Pills
+  const conLabel  = d.conviction === 'moonshot' ? '🌙 Moonshot' : 'Core Position';
+  const consPill  = d.members.length === 3
+    ? `<span class="pill consensus">3-way consensus</span>`
+    : '';
+  document.getElementById('d-pills').innerHTML = `
+    <span class="pill ${d.conviction}">${conLabel}</span>
+    <span class="pill weight">${d.weight}% weight</span>
+    ${consPill}
+  `;
+
+  // Upside
+  const uCls  = d.upside >= 0 ? 'pos' : 'neg';
+  const uSign = d.upside >= 0 ? '+' : '';
+  document.getElementById('d-upside').innerHTML = `
+    <div class="upside-card">
+      <div class="upside-card-label">Mean Target</div>
+      <div class="upside-card-val ${uCls}">${uSign}${d.upside}%</div>
+    </div>
+    <div class="upside-card">
+      <div class="upside-card-label">Median Target</div>
+      <div class="upside-card-val ${uCls}">${uSign}${d.upside_med}%</div>
+    </div>`;
+
+  // Members
+  const mNames = { claude: 'Claude', gpt: 'GPT-4o', gemini: 'Gemini' };
+  document.getElementById('d-members').innerHTML = d.members.map(m => `
+    <div class="member-chip">
+      <div class="dot ${m}"></div>
+      ${mNames[m] || m}
+    </div>`).join('');
+
+  // Rationale
+  document.getElementById('d-rationale').textContent = d.rationale;
+
+  document.getElementById('backdrop').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('backdrop').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+
+document.getElementById('d-close').addEventListener('click', closeDrawer);
+document.getElementById('backdrop').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+
+renderTreemap();
+renderSignal();
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(renderTreemap, 120);
+});
+</script>
+</body>
+</html>

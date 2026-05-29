@@ -1,0 +1,12 @@
+# Project data — commit *.example.* variants instead
+data/advisor_cache.json
+data/advisor_log.*
+data/enrichment_cache.json
+data/exclusions.json
+data/perf_cache.json
+data/picks_cache/
+data/screener_cache.json
+data/runs/
+
+# Local Claude settings
+.claude/

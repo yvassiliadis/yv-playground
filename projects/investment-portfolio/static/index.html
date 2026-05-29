@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Big Fat Greek Portfolio</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/vars.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/layout.css">
+<link rel="stylesheet" href="/static/css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+</head>
+<body>
+<div id="app">
+
+  <nav class="nav">
+    <span class="nav-brand">My Big Fat Greek Portfolio <em>by Feta Beta Capital</em></span>
+    <div class="nav-links">
+      <a class="nav-link" href="#portfolio"   data-view="portfolio">Portfolio</a>
+      <a class="nav-link" href="#performance" data-view="performance">Performance</a>
+      <a class="nav-link" href="#members"     data-view="members">Members</a>
+      <a class="nav-link" href="#history"     data-view="history">History</a>
+      <a class="nav-link" href="#research"    data-view="research">Research</a>
+      <a class="nav-link" href="#settings"    data-view="settings">Settings</a>
+    </div>
+    <div class="nav-actions">
+      <span class="nav-age" id="nav-age"></span>
+      <input class="nav-advisor-input" id="nav-ticker" placeholder="Apple or AAPL" maxlength="40">
+      <button class="nav-ask-btn" id="nav-ask-btn">Ask</button>
+      <button class="nav-run-btn" id="nav-run-btn">Run Committee</button>
+    </div>
+  </nav>
+
+  <div id="view-portfolio"   class="view active"></div>
+  <div id="view-performance" class="view"></div>
+  <div id="view-members"     class="view"></div>
+  <div id="view-history"     class="view"></div>
+  <div id="view-research"    class="view"></div>
+  <div id="view-settings"    class="view"></div>
+
+</div>
+
+<!-- Shared drawer -->
+<div class="backdrop" id="backdrop"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-top-bar" id="d-bar"></div>
+  <div class="drawer-header">
+    <button class="drawer-close" id="d-close">×</button>
+    <div class="drawer-ticker" id="d-ticker"></div>
+    <div class="drawer-company" id="d-company"></div>
+    <div class="drawer-pills" id="d-pills"></div>
+    <div class="invest-amount" id="d-invest"></div>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-section">
+      <div class="drawer-section-label">Upside to Target</div>
+      <div class="upside-row" id="d-upside"></div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Committee Members</div>
+      <div class="drawer-pills" id="d-members"></div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Investment Thesis</div>
+      <div class="rationale" id="d-rationale"></div>
+    </div>
+    <div class="drawer-section" id="d-analyst-section" style="display:none;">
+      <div class="drawer-section-label">Analyst Takes</div>
+      <div id="d-analyst-takes"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">Working…</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
