@@ -6,22 +6,18 @@ Built as a showcase of how I use LLMs iteratively to ship a real product. See [`
 
 ## Screenshots
 
-**Portfolio** — treemap weighted by cross-member conviction, with upside-to-target signal strip
-
-![Portfolio treemap](docs/screenshots/portfolio-treemap.png)
-![Portfolio signals](docs/screenshots/portfolio-signals.png)
-
-**Stock detail** — per-ticker drawer with committee takes, analyst consensus, and recommended allocation
-
-![Stock detail drawer](docs/screenshots/portfolio-drawer.png)
-
-**Performance** — portfolio vs. SPY / VGT / VTI over a rolling 1-year window
-
-![Performance chart](docs/screenshots/performance.png)
-
-**Committee members** — each model's independent picks with conviction and variant perception
-
-![Committee members](docs/screenshots/members.png)
+<table>
+<tr>
+  <td><img src="docs/screenshots/portfolio-treemap.png"><br><sub>Portfolio · allocation map</sub></td>
+  <td><img src="docs/screenshots/portfolio-signals.png"><br><sub>Portfolio · signal strip</sub></td>
+  <td><img src="docs/screenshots/portfolio-drawer.png"><br><sub>Stock detail drawer</sub></td>
+</tr>
+<tr>
+  <td><img src="docs/screenshots/performance.png"><br><sub>Performance vs. benchmarks</sub></td>
+  <td><img src="docs/screenshots/members.png"><br><sub>Committee members</sub></td>
+  <td></td>
+</tr>
+</table>
 
 ## What it does
 
@@ -89,3 +85,7 @@ tests/
 ## Planning process
 
 This project was built iteratively using Claude Code. The [`docs/planning/`](docs/planning/) folder contains the PRD and design documents that shaped each major phase — a real record of how I work with LLMs to go from idea to shipped product.
+
+## Product pitch
+
+A two-page product one-pager describing this as a commercial offering is in [`docs/quorum-pitch.pdf`](docs/quorum-pitch.pdf).
