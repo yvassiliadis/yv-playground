@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ from .screener import format_for_prompt, screen_universe
 
 RUNS_DIR = Path(__file__).parent.parent / "data" / "runs"
 _PICKS_CACHE_DIR = Path(__file__).parent.parent / "data" / "picks_cache"
+_RUN_FILENAME_RE = re.compile(r"^\d{8}_\d{6}$")
 _PICKS_CACHE_TTL_SECONDS = 24 * 3600
 _RESEARCH_CACHE_TTL_SECONDS = 24 * 3600
 
@@ -118,7 +120,9 @@ async def run_committee(
         else:
             research, sources = await claude_member.get_research(anthropic_client)
             _save_research_cache(research, sources)
-        picks = await claude_member.get_picks(anthropic_client, screened_section, research)
+        picks = await claude_member.get_picks(
+            anthropic_client, screened_section, research
+        )
         logger.info("Claude total: %.1fs", time.monotonic() - t0)
         _save_picks_cache("claude", picks, sources)
         return picks, sources
@@ -234,7 +238,8 @@ def _filter_run(run: CommitteeRun) -> CommitteeRun:
     excluded = {t.upper() for t in EXCLUDED_TICKERS}
 
     portfolio = [
-        h for h in run.portfolio
+        h
+        for h in run.portfolio
         if h.ticker.upper() not in excluded and len(h.nominated_by) >= 2
     ]
     claude_picks = [p for p in run.claude_picks if p.ticker.upper() not in excluded]
@@ -272,7 +277,10 @@ def _filter_run(run: CommitteeRun) -> CommitteeRun:
 def load_latest_run() -> CommitteeRun | None:
     if not RUNS_DIR.exists():
         return None
-    files = sorted(RUNS_DIR.glob("*.json"), reverse=True)
+    files = sorted(
+        (f for f in RUNS_DIR.glob("*.json") if _RUN_FILENAME_RE.match(f.stem)),
+        reverse=True,
+    )
     if not files:
         return None
     data = json.loads(files[0].read_text())
@@ -282,11 +290,16 @@ def load_latest_run() -> CommitteeRun | None:
 def load_all_runs() -> list[CommitteeRun]:
     if not RUNS_DIR.exists():
         return []
-    files = sorted(RUNS_DIR.glob("*.json"), reverse=True)
+    files = sorted(
+        (f for f in RUNS_DIR.glob("*.json") if _RUN_FILENAME_RE.match(f.stem)),
+        reverse=True,
+    )
     runs = []
     for f in files:
         try:
-            runs.append(_filter_run(CommitteeRun.model_validate(json.loads(f.read_text()))))
+            runs.append(
+                _filter_run(CommitteeRun.model_validate(json.loads(f.read_text())))
+            )
         except Exception:
             continue
     return runs

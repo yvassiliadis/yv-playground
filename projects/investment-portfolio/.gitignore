@@ -15,7 +15,7 @@ data/picks_cache/gemini.json
 data/picks_cache/gpt.json
 data/picks_cache/research.json
 data/runs/*
-!data/runs/example_run.json
+!data/runs/00000000_000000.example.json
 
 # Local Claude settings
 .claude/
