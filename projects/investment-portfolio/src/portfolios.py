@@ -26,7 +26,7 @@ def save(tracked: list[TrackedPortfolio]) -> None:
 
 def parse_csv(content: str) -> list[PortfolioPosition]:
     # Strip BOM that Excel adds when exporting CSV
-    content = content.lstrip("﻿")
+    content = content.removeprefix("﻿")
     reader = csv.DictReader(io.StringIO(content))
     positions = []
     for row in reader:
@@ -117,10 +117,11 @@ async def enrich(portfolio: TrackedPortfolio, prices: dict[str, float | None]) -
     if all_have_cost and total_cost > 0 and total_value > 0:
         total_return_pct = round((total_value - total_cost) / total_cost * 100, 1)
 
+    any_missing = any(p["total_value"] is None for p in enriched_positions)
     return {
         "name": portfolio.name,
         "positions": enriched_positions,
-        "total_value": round(total_value, 2) if total_value else None,
+        "total_value": None if any_missing else round(total_value, 2),
         "total_return_pct": total_return_pct,
     }
 

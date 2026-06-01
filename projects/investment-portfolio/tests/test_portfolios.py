@@ -1,3 +1,6 @@
+import pytest
+
+from src import portfolios
 from src.models import PortfolioPosition, TrackedPortfolio
 
 
@@ -21,11 +24,6 @@ def test_portfolio_round_trips_json():
     assert len(restored.positions) == 2
     assert restored.positions[0].avg_cost == 150.0
     assert restored.positions[1].avg_cost is None
-
-
-import pytest
-
-from src import portfolios
 
 
 def test_load_returns_empty_when_file_missing(tmp_path, monkeypatch):
