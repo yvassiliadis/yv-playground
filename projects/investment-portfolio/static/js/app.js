@@ -6,6 +6,7 @@ import { initMembers }      from './views/members.js';
 import { initHistory }      from './views/history.js';
 import { initResearch }     from './views/research.js';
 import { initSettings }     from './views/settings.js';
+import { initTracker }      from './views/tracker.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 export let latestRun = null;
@@ -36,7 +37,7 @@ function updateAgeBadge(run) {
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
-const VIEWS = ['portfolio', 'performance', 'members', 'history', 'research', 'settings'];
+const VIEWS = ['portfolio', 'performance', 'members', 'history', 'research', 'settings', 'tracker'];
 
 function activate(viewName) {
   VIEWS.forEach(v => {
@@ -111,6 +112,7 @@ async function init() {
   initHistory(allRuns);
   await initResearch();
   await initSettings();
+  await initTracker(latestRun);
 
   // Wire controls
   document.getElementById('nav-run-btn').addEventListener('click', runCommittee);

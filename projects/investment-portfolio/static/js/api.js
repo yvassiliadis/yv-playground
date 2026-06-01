@@ -20,4 +20,19 @@ export const api = {
   askAdvisor:       (ticker) => request('POST', '/api/advisor', { ticker }),
   getSettings:      ()       => request('GET',  '/api/settings'),
   updateSettings:   (data)   => request('PUT',  '/api/settings', data),
+  getPortfolios:            ()           => request('GET',    '/api/portfolios'),
+  savePortfolios:           (data)       => request('PUT',    '/api/portfolios', data),
+  deletePortfolio:          (name)       => request('DELETE', `/api/portfolios/${encodeURIComponent(name)}`),
+  getPortfoliosPerformance: ()           => request('GET',    '/api/portfolios/performance'),
+  importPortfolio: async (name, file) => {
+    const form = new FormData();
+    form.append('name', name);
+    form.append('file', file);
+    const res = await fetch('/api/portfolios/import', { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    return res.json();
+  },
 };
