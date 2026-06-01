@@ -2,7 +2,6 @@ from datetime import date
 from unittest.mock import patch
 
 import pandas as pd
-import pytest
 
 from src.models import PortfolioPosition, TrackedPortfolio
 from src.performance import tracked_portfolios_performance

@@ -146,13 +146,16 @@ def tracked_portfolios_performance(
         result[p.name] = {"type": "portfolio", **summary(daily_value)}
 
     for ticker in ["SPY", "VTI"]:
-        if ticker in closes.columns:
-            result[ticker.lower()] = {"type": "benchmark", **summary(closes[ticker])}
+        col = closes.get(ticker)
+        if col is not None and col.notna().any():
+            result[ticker.lower()] = {"type": "benchmark", **summary(col)}
 
     if committee:
         ct = committee["tickers"]
         cw = {t: w / 100 for t, w in zip(ct, committee["weights"])}
-        available_ct = [t for t in ct if t in closes.columns]
+        available_ct = [
+            t for t in ct if t in closes.columns and closes[t].notna().any()
+        ]
         if available_ct:
             comm_value = sum(closes[t] * cw[t] for t in available_ct)
             result["committee"] = {"type": "committee", **summary(comm_value)}
