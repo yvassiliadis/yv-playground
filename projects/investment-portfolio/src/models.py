@@ -58,3 +58,14 @@ class AdvisorResponse(BaseModel):
     suggested_allocation_pct: float | None = None
     mean_upside_pct: float | None = None
     median_upside_pct: float | None = None
+
+
+class PortfolioPosition(BaseModel):
+    ticker: str
+    shares: float
+    avg_cost: float | None = None
+
+
+class TrackedPortfolio(BaseModel):
+    name: str
+    positions: list[PortfolioPosition]
