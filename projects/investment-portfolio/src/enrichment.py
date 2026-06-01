@@ -45,9 +45,11 @@ async def enrich_picks_with_prices(picks: list[Pick]) -> list[Pick]:
     now = datetime.now(timezone.utc)
 
     stale = [
-        t for t in tickers
+        t
+        for t in tickers
         if t not in cache
-        or (now - datetime.fromisoformat(cache[t]["cached_at"])).total_seconds() > _ENRICHMENT_CACHE_TTL_SECONDS
+        or (now - datetime.fromisoformat(cache[t]["cached_at"])).total_seconds()
+        > _ENRICHMENT_CACHE_TTL_SECONDS
     ]
 
     if stale:
@@ -80,3 +82,25 @@ async def enrich_picks_with_prices(picks: list[Pick]) -> list[Pick]:
             )
         )
     return enriched
+
+
+async def get_current_prices(tickers: list[str]) -> dict[str, float | None]:
+    """Returns current prices for tickers, using and updating the enrichment cache."""
+    cache = _load_enrichment_cache()
+    now = datetime.now(timezone.utc)
+
+    stale = [
+        t
+        for t in tickers
+        if t not in cache
+        or (now - datetime.fromisoformat(cache[t]["cached_at"])).total_seconds()
+        > _ENRICHMENT_CACHE_TTL_SECONDS
+    ]
+
+    if stale:
+        results = await asyncio.gather(*[_fetch_ticker_data(t) for t in stale])
+        for ticker, data in zip(stale, results):
+            cache[ticker] = {**data, "cached_at": now.isoformat()}
+        _save_enrichment_cache(cache)
+
+    return {t: cache.get(t, {}).get("current_price") for t in tickers}
