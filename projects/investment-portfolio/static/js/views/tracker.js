@@ -3,6 +3,14 @@ import { showToast } from '../app.js';
 
 let chartInstance = null;
 
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function filterSeries(rawDict, rangeOpt) {
@@ -60,7 +68,7 @@ function holdingsTable(positions) {
       <tbody>
         ${positions.map(p => `
           <tr style="border-bottom:1px solid var(--border);color:var(--text-2);">
-            <td style="padding:6px 8px 6px 0;font-weight:500;color:var(--text);">${p.ticker}</td>
+            <td style="padding:6px 8px 6px 0;font-weight:500;color:var(--text);">${esc(p.ticker)}</td>
             <td style="text-align:right;padding:6px 8px;">${p.shares}</td>
             <td style="text-align:right;padding:6px 8px;">${p.current_price != null ? '$' + p.current_price.toFixed(2) : '–'}</td>
             <td style="text-align:right;padding:6px 8px;">${formatCurrency(p.total_value)}</td>
@@ -75,10 +83,10 @@ function portfolioCard(p) {
   return `
     <div class="tracker-card" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
-        <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;color:var(--text);">${p.name}</div>
+        <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;color:var(--text);">${esc(p.name)}</div>
         <div style="display:flex;gap:8px;">
-          <button class="settings-btn" data-import="${p.name}" style="font-size:0.65rem;padding:4px 10px;">Import CSV</button>
-          <button class="settings-btn" data-remove="${p.name}" style="font-size:0.65rem;padding:4px 10px;color:var(--red);border-color:var(--red);">Remove</button>
+          <button class="settings-btn" data-import="${esc(p.name)}" style="font-size:0.65rem;padding:4px 10px;">Import CSV</button>
+          <button class="settings-btn" data-remove="${esc(p.name)}" style="font-size:0.65rem;padding:4px 10px;color:var(--red);border-color:var(--red);">Remove</button>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
@@ -303,6 +311,7 @@ export async function initTracker(latestRun) {
   });
 
   document.getElementById('import-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('import-submit').click();
     if (e.key === 'Escape') closeModal();
   });
 
@@ -356,10 +365,16 @@ export async function initTracker(latestRun) {
   }
 
   async function reload() {
-    portfoliosData = await api.getPortfolios();
+    try {
+      portfoliosData = await api.getPortfolios();
+    } catch (e) {
+      showToast(e.message, 'error');
+      return;
+    }
     renderCards();
 
     if (portfoliosData.length) {
+      perfData = null;  // clear before fetch so stale data doesn't linger on error
       document.getElementById('tracker-chart-container').innerHTML =
         '<div style="color:var(--text-4);font-family:var(--font-mono);font-size:0.8rem;padding:20px;">Loading performance data…</div>';
       try {
@@ -374,9 +389,5 @@ export async function initTracker(latestRun) {
     }
   }
 
-  try {
-    await reload();
-  } catch (e) {
-    showToast(e.message, 'error');
-  }
+  await reload();
 }
