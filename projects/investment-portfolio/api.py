@@ -160,11 +160,8 @@ async def import_portfolio(name: str = Form(...), file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="No valid positions found in file")
 
     tracked = portfolios.load()
-    existing = next((p for p in tracked if p.name == name), None)
-    if existing:
-        existing.positions = positions
-    else:
-        tracked.append(TrackedPortfolio(name=name, positions=positions))
+    tracked = [p for p in tracked if p.name != name]
+    tracked.append(TrackedPortfolio(name=name, positions=positions))
     portfolios.save(tracked)
     return {"name": name, "count": len(positions)}
 
