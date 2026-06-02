@@ -19,6 +19,8 @@ function filterSeries(rawDict, rangeOpt) {
     .sort((a, b) => a[0] - b[0]);
   if (!entries.length) return { labels: [], values: [] };
   const cutoffs = {
+    '1D':  new Date(Date.now() - 1  * 86400000),
+    '3D':  new Date(Date.now() - 3  * 86400000),
     '1W':  new Date(Date.now() - 7  * 86400000),
     '1M':  new Date(Date.now() - 30 * 86400000),
     '3M':  new Date(Date.now() - 90 * 86400000),
@@ -49,10 +51,27 @@ function formatReturn(v) {
 
 // ── Portfolio cards ───────────────────────────────────────────────────────────
 
-function holdingsTable(positions) {
+function sortPositions(positions, sort) {
+  if (!sort) return positions;
+  const { col, dir } = sort;
+  const m = dir === 'desc' ? -1 : 1;
+  return [...positions].sort((a, b) => ((a[col] ?? -Infinity) - (b[col] ?? -Infinity)) * m);
+}
+
+function sortIcon(col, sort) {
+  if (!sort || sort.col !== col) return '';
+  return sort.dir === 'desc' ? ' ↓' : ' ↑';
+}
+
+const SORT_TH = 'text-align:right;padding:4px 8px;cursor:pointer;user-select:none;';
+const SORT_TH_ACTIVE = 'color:var(--amber);';
+
+function holdingsTable(positions, sort) {
   if (!positions.length) {
     return '<div style="color:var(--text-4);font-family:var(--font-mono);font-size:0.75rem;padding:12px 0;">No positions imported yet.</div>';
   }
+  const sorted = sortPositions(positions, sort);
+  const thStyle = (col) => SORT_TH + (sort?.col === col ? SORT_TH_ACTIVE : '');
   return `
     <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:0.72rem;margin-top:12px;">
       <thead>
@@ -60,13 +79,13 @@ function holdingsTable(positions) {
           <th style="text-align:left;padding:4px 8px 8px 0;">Ticker</th>
           <th style="text-align:right;padding:4px 8px;">Shares</th>
           <th style="text-align:right;padding:4px 8px;">Price</th>
-          <th style="text-align:right;padding:4px 8px;">Value</th>
-          <th style="text-align:right;padding:4px 8px;">Weight</th>
-          <th style="text-align:right;padding:4px 0 4px 8px;">Return</th>
+          <th data-sort-col="total_value" style="${thStyle('total_value')}">Value${sortIcon('total_value', sort)}</th>
+          <th data-sort-col="weight" style="${thStyle('weight')}">Weight${sortIcon('weight', sort)}</th>
+          <th data-sort-col="return_pct" style="${thStyle('return_pct')}padding-right:0;padding-left:8px;">Return${sortIcon('return_pct', sort)}</th>
         </tr>
       </thead>
       <tbody>
-        ${positions.map(p => `
+        ${sorted.map(p => `
           <tr style="border-bottom:1px solid var(--border);color:var(--text-2);">
             <td style="padding:6px 8px 6px 0;font-weight:500;color:var(--text);">${esc(p.ticker)}</td>
             <td style="text-align:right;padding:6px 8px;">${p.shares}</td>
@@ -79,7 +98,7 @@ function holdingsTable(positions) {
     </table>`;
 }
 
-function portfolioCard(p) {
+function portfolioCard(p, sort) {
   return `
     <div class="tracker-card" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
@@ -103,18 +122,54 @@ function portfolioCard(p) {
           <div style="font-family:var(--font-mono);font-size:1rem;color:var(--text);">${p.positions.length}</div>
         </div>
       </div>
-      <details>
+      <details data-portfolio="${esc(p.name)}">
         <summary style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-3);cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none;">
           <span style="font-size:0.6rem;">▸</span> View Holdings
         </summary>
-        ${holdingsTable(p.positions)}
+        <div class="holdings-content" style="overflow-x:auto;">
+          ${holdingsTable(p.positions, sort)}
+        </div>
       </details>
     </div>`;
 }
 
-// ── Chart ─────────────────────────────────────────────────────────────────────
+// ── Comparison cards ──────────────────────────────────────────────────────────
 
 const PORTFOLIO_COLORS = ['#06b6d4', '#22c55e', '#f97316', '#a855f7', '#ec4899', '#eab308'];
+
+function renderComparisonCards(perfData, rangeOpt) {
+  const container = document.getElementById('tracker-comparison-cards');
+  if (!container || !perfData) return;
+
+  const spyRet = perfData.spy ? (() => { const { values } = filterSeries(perfData.spy.series, rangeOpt); return values.length ? values[values.length - 1] : null; })() : null;
+
+  const portfolioEntries = Object.entries(perfData).filter(([, v]) => v.type === 'portfolio');
+
+  if (!portfolioEntries.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let colorIdx = 0;
+  container.innerHTML = portfolioEntries.map(([key, val]) => {
+    const color = PORTFOLIO_COLORS[colorIdx++ % PORTFOLIO_COLORS.length];
+    const { values } = filterSeries(val.series, rangeOpt);
+    const ret = values.length ? values[values.length - 1] : null;
+    const retTxt = ret != null ? (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%' : '–';
+    const retColor = ret == null ? 'var(--text-4)' : ret >= 0 ? 'var(--green)' : 'var(--red)';
+    const delta = ret != null && spyRet != null ? ret - spyRet : null;
+    const deltaTxt = delta != null ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}pp vs SPY` : '';
+    const deltaColor = delta == null ? '' : delta >= 0 ? 'var(--green)' : 'var(--red)';
+    return `
+      <div class="metric-card" style="border-top: 2px solid ${color};">
+        <div class="metric-label">${esc(key)}</div>
+        <div class="metric-val" style="color:${retColor};">${retTxt}</div>
+        ${delta != null ? `<div class="metric-delta" style="color:${deltaColor};">${deltaTxt}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
 
 function renderChart(perfData, rangeOpt) {
   const ctx = document.getElementById('tracker-chart')?.getContext('2d');
@@ -230,6 +285,7 @@ export async function initTracker(latestRun) {
   let rangeOpt = '1Y';
   let portfoliosData = [];
   let perfData = null;
+  const sortState = {};
 
   const PILL_BASE   = 'font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.06em;padding:5px 12px;border-radius:5px;border:1px solid var(--border);color:var(--text-3);background:transparent;cursor:pointer;transition:all 0.15s;';
   const PILL_ACTIVE = 'color:var(--bg);background:var(--amber);border-color:var(--amber);';
@@ -239,17 +295,18 @@ export async function initTracker(latestRun) {
       <div style="font-family:var(--font-serif);font-size:1.9rem;font-weight:700;letter-spacing:-0.02em;color:var(--text);">My Portfolios</div>
       <button id="tracker-add-btn" class="settings-btn primary" style="font-size:0.75rem;padding:7px 16px;">+ Add Portfolio</button>
     </div>
-    <div id="tracker-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:40px;"></div>
+    <div id="tracker-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:16px;margin-bottom:40px;"></div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <div style="font-family:var(--font-serif);font-size:1.3rem;font-weight:600;color:var(--text-2);">Performance Comparison</div>
       <div style="display:flex;gap:4px;" id="tracker-range-pills">
-        ${['1W','1M','3M','YTD','1Y'].map(r =>
+        ${['1D','3D','1W','1M','3M','YTD','1Y'].map(r =>
           `<button class="range-pill" data-range="${r}"
             style="${PILL_BASE}${r === rangeOpt ? PILL_ACTIVE : ''}"
           >${r}</button>`).join('')}
       </div>
     </div>
+    <div id="tracker-comparison-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;"></div>
     <div id="tracker-chart-container" style="height:400px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:12px;">
       <canvas id="tracker-chart"></canvas>
     </div>
@@ -322,6 +379,7 @@ export async function initTracker(latestRun) {
   document.getElementById('tracker-cards').addEventListener('click', async e => {
     const importBtn = e.target.closest('[data-import]');
     const removeBtn = e.target.closest('[data-remove]');
+    const sortTh = e.target.closest('th[data-sort-col]');
 
     if (importBtn) {
       openModal(importBtn.dataset.import);
@@ -339,6 +397,22 @@ export async function initTracker(latestRun) {
         showToast(e.message, 'error');
       }
     }
+
+    if (sortTh) {
+      const col = sortTh.dataset.sortCol;
+      const details = sortTh.closest('details[data-portfolio]');
+      if (!details) return;
+      const name = details.dataset.portfolio;
+      const cur = sortState[name];
+      sortState[name] = cur?.col === col
+        ? { col, dir: cur.dir === 'desc' ? 'asc' : 'desc' }
+        : { col, dir: 'desc' };
+      const portfolio = portfoliosData.find(p => p.name === name);
+      if (portfolio) {
+        const content = details.querySelector('.holdings-content');
+        if (content) content.innerHTML = holdingsTable(portfolio.positions, sortState[name]);
+      }
+    }
   });
 
   // ── Range pills ──────────────────────────────────────────────────────────────
@@ -347,7 +421,10 @@ export async function initTracker(latestRun) {
       rangeOpt = btn.dataset.range;
       view.querySelectorAll('.range-pill').forEach(b => { b.style.cssText = PILL_BASE; });
       btn.style.cssText = PILL_BASE + PILL_ACTIVE;
-      if (perfData) renderChart(perfData, rangeOpt);
+      if (perfData) {
+        renderComparisonCards(perfData, rangeOpt);
+        renderChart(perfData, rangeOpt);
+      }
     });
   });
 
@@ -361,7 +438,7 @@ export async function initTracker(latestRun) {
         </div>`;
       return;
     }
-    container.innerHTML = portfoliosData.map(p => portfolioCard(p)).join('');
+    container.innerHTML = portfoliosData.map(p => portfolioCard(p, sortState[p.name])).join('');
   }
 
   async function reload() {
@@ -381,7 +458,10 @@ export async function initTracker(latestRun) {
         perfData = await api.getPortfoliosPerformance();
         document.getElementById('tracker-chart-container').innerHTML =
           '<canvas id="tracker-chart"></canvas>';
-        if (Object.keys(perfData).length) renderChart(perfData, rangeOpt);
+        if (Object.keys(perfData).length) {
+          renderComparisonCards(perfData, rangeOpt);
+          renderChart(perfData, rangeOpt);
+        }
       } catch (e) {
         document.getElementById('tracker-chart-container').innerHTML =
           `<div style="color:var(--red);font-family:var(--font-mono);font-size:0.8rem;padding:20px;">Could not load performance data.</div>`;
