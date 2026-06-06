@@ -9,14 +9,15 @@ import yfinance as yf
 BENCHMARKS = ["SPY", "VGT", "VTI"]
 
 _PERF_CACHE_PATH = Path(__file__).parent.parent / "data" / "perf_cache.json"
+_TRACKER_PERF_CACHE_PATH = Path(__file__).parent.parent / "data" / "tracker_perf_cache.json"
 _PERF_CACHE_TTL_SECONDS = 4 * 3600
 
 
-def _perf_cache_key(tickers: list[str], since: date, end: date) -> str:
-    return "|".join(sorted(tickers)) + f"|{since}|{end}"
+def _perf_cache_key(tickers: list[str], since: date) -> str:
+    return "|".join(sorted(tickers)) + f"|{since}"
 
 
-def _load_perf_cache(tickers: list[str], since: date, end: date) -> pd.DataFrame | None:
+def _load_perf_cache(tickers: list[str], since: date) -> pd.DataFrame | None:
     if not _PERF_CACHE_PATH.exists():
         return None
     try:
@@ -25,23 +26,21 @@ def _load_perf_cache(tickers: list[str], since: date, end: date) -> pd.DataFrame
         age = (datetime.now(timezone.utc) - cached_at).total_seconds()
         if age > _PERF_CACHE_TTL_SECONDS:
             return None
-        if data.get("key") != _perf_cache_key(tickers, since, end):
+        if data.get("key") != _perf_cache_key(tickers, since):
             return None
         return pd.read_json(data["df"], orient="split")
     except Exception:
         return None
 
 
-def _save_perf_cache(
-    tickers: list[str], since: date, end: date, df: pd.DataFrame
-) -> None:
+def _save_perf_cache(tickers: list[str], since: date, df: pd.DataFrame) -> None:
     try:
         _PERF_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         _PERF_CACHE_PATH.write_text(
             json.dumps(
                 {
                     "cached_at": datetime.now(timezone.utc).isoformat(),
-                    "key": _perf_cache_key(tickers, since, end),
+                    "key": _perf_cache_key(tickers, since),
                     "df": df.to_json(orient="split"),
                 },
                 indent=2,
@@ -51,8 +50,8 @@ def _save_perf_cache(
         pass
 
 
-def _fetch_returns(tickers: list[str], start: date, end: date) -> pd.DataFrame:
-    raw = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
+def _fetch_returns(tickers: list[str], start: date) -> pd.DataFrame:
+    raw = yf.download(tickers, start=start, auto_adjust=True, progress=False)
     closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
     return closes / closes.iloc[0]
 
@@ -69,13 +68,12 @@ def portfolio_vs_benchmarks(
     if since is None:
         since = date.today() - timedelta(days=365)
 
-    end = date.today()
     all_tickers = list(set(portfolio_tickers + BENCHMARKS))
 
-    returns = _load_perf_cache(all_tickers, since, end)
+    returns = _load_perf_cache(all_tickers, since)
     if returns is None:
-        returns = _fetch_returns(all_tickers, since, end)
-        _save_perf_cache(all_tickers, since, end, returns)
+        returns = _fetch_returns(all_tickers, since)
+        _save_perf_cache(all_tickers, since, returns)
 
     weights = {t: w / 100 for t, w in zip(portfolio_tickers, portfolio_weights)}
     available = [t for t in portfolio_tickers if t in returns.columns]
@@ -96,6 +94,59 @@ def portfolio_vs_benchmarks(
     return result
 
 
+def _tracker_cache_key(
+    portfolios: list, committee: Optional[dict], since: date
+) -> str:
+    parts = []
+    for p in sorted(portfolios, key=lambda x: x.name):
+        pos_str = ",".join(
+            f"{pos.ticker}:{pos.shares}"
+            for pos in sorted(p.positions, key=lambda x: x.ticker)
+        )
+        parts.append(f"{p.name}:{pos_str}")
+    if committee:
+        parts.append("committee:" + ",".join(sorted(committee["tickers"])))
+    parts.append(str(since))
+    return "|".join(parts)
+
+
+def _load_tracker_cache(
+    portfolios: list, committee: Optional[dict], since: date
+) -> dict | None:
+    if not _TRACKER_PERF_CACHE_PATH.exists():
+        return None
+    try:
+        data = json.loads(_TRACKER_PERF_CACHE_PATH.read_text())
+        cached_at = datetime.fromisoformat(data["cached_at"])
+        age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+        if age > _PERF_CACHE_TTL_SECONDS:
+            return None
+        if data.get("key") != _tracker_cache_key(portfolios, committee, since):
+            return None
+        return data["result"]
+    except Exception:
+        return None
+
+
+def _save_tracker_cache(
+    portfolios: list, committee: Optional[dict], since: date, result: dict
+) -> None:
+    try:
+        _TRACKER_PERF_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _TRACKER_PERF_CACHE_PATH.write_text(
+            json.dumps(
+                {
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "key": _tracker_cache_key(portfolios, committee, since),
+                    "result": result,
+                },
+                indent=2,
+            )
+        )
+    except Exception:
+        pass
+
+
 def tracked_portfolios_performance(
     portfolios: list,  # list[TrackedPortfolio]
     since: Optional[date] = None,
@@ -108,7 +159,10 @@ def tracked_portfolios_performance(
     """
     if since is None:
         since = date.today() - timedelta(days=365)
-    end = date.today()
+
+    cached = _load_tracker_cache(portfolios, committee, since)
+    if cached is not None:
+        return cached
 
     all_tickers: set[str] = {"SPY", "VTI"}
     for p in portfolios:
@@ -118,7 +172,7 @@ def tracked_portfolios_performance(
         all_tickers.update(committee["tickers"])
 
     raw = yf.download(
-        list(all_tickers), start=since, end=end, auto_adjust=True, progress=False
+        list(all_tickers), start=since, auto_adjust=True, progress=False
     )
     closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
 
@@ -160,4 +214,5 @@ def tracked_portfolios_performance(
             comm_value = sum(closes[t] * cw[t] for t in available_ct)
             result["committee"] = {"type": "committee", **summary(comm_value)}
 
+    _save_tracker_cache(portfolios, committee, since, result)
     return result

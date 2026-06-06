@@ -16,6 +16,8 @@ data/picks_cache/gpt.json
 data/picks_cache/research.json
 data/runs/*
 !data/runs/00000000_000000.example.json
+data/*.csv
+data/portfolios.json
 
 # Local Claude settings
 .claude/

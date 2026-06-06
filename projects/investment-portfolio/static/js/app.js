@@ -39,13 +39,18 @@ function updateAgeBadge(run) {
 // ── Router ────────────────────────────────────────────────────────────────────
 const VIEWS = ['portfolio', 'performance', 'members', 'history', 'research', 'settings', 'tracker'];
 
+const DROPDOWN_VIEWS = ['history'];
+
 function activate(viewName) {
+  document.getElementById('nav-more-menu')?.classList.remove('open');
   VIEWS.forEach(v => {
     document.getElementById(`view-${v}`).classList.toggle('active', v === viewName);
   });
-  document.querySelectorAll('.nav-link').forEach(a => {
+  document.querySelectorAll('[data-view]').forEach(a => {
     a.classList.toggle('active', a.dataset.view === viewName);
   });
+  const moreBtn = document.getElementById('nav-more-btn');
+  if (moreBtn) moreBtn.classList.toggle('has-active', DROPDOWN_VIEWS.includes(viewName));
 }
 
 function route() {
@@ -53,6 +58,25 @@ function route() {
   const view = VIEWS.includes(hash) ? hash : 'portfolio';
   activate(view);
   if (view === 'portfolio') onPortfolioActivated();
+  if (view === 'performance') initPerformance(latestRun);
+  if (view === 'tracker') initTracker(latestRun);
+}
+
+function scheduleMarketCloseRefresh() {
+  const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const target = new Date(nowET);
+  target.setHours(16, 1, 0, 0);
+  if (nowET >= target) target.setDate(target.getDate() + 1);
+  const day = target.getDay();
+  if (day === 6) target.setDate(target.getDate() + 2);
+  if (day === 0) target.setDate(target.getDate() + 1);
+  setTimeout(async () => {
+    try { latestRun = await api.getLatestRun(); } catch (_) {}
+    initPerformance(latestRun);
+    initTracker(latestRun);
+    showToast('Market data refreshed');
+    scheduleMarketCloseRefresh();
+  }, target - nowET);
 }
 
 // ── Run Committee ─────────────────────────────────────────────────────────────
@@ -65,6 +89,8 @@ async function runCommittee() {
     allRuns   = await api.getAllRuns();
     updateAgeBadge(latestRun);
     await refreshPortfolio(latestRun);
+    initPerformance(latestRun);
+    initTracker(latestRun);
     showToast('Committee run complete!');
   } catch (e) {
     showToast(e.message, 'error');
@@ -107,12 +133,10 @@ async function init() {
 
   // Init all views with data
   initPortfolio(latestRun);
-  initPerformance(latestRun);
   initMembers(latestRun);
   initHistory(allRuns);
   await initResearch();
   await initSettings();
-  await initTracker(latestRun);
 
   // Wire controls
   document.getElementById('nav-run-btn').addEventListener('click', runCommittee);
@@ -121,9 +145,20 @@ async function init() {
     if (e.key === 'Enter') askAdvisor();
   });
 
+  // More dropdown
+  const moreBtn = document.getElementById('nav-more-btn');
+  const moreMenu = document.getElementById('nav-more-menu');
+  moreBtn.addEventListener('click', e => { e.stopPropagation(); moreMenu.classList.toggle('open'); });
+  document.addEventListener('click', () => moreMenu.classList.remove('open'));
+
+  // Gear → settings
+  document.getElementById('nav-settings-btn').addEventListener('click', () => { location.hash = '#settings'; });
+
   // Hash routing
   window.addEventListener('hashchange', route);
   route();
+
+  scheduleMarketCloseRefresh();
 }
 
 init();

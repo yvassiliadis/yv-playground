@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { showToast } from '../app.js';
+import { prevTradingDays } from '../dates.js';
 
 let chartInstance = null;
 
@@ -12,6 +13,8 @@ function filterSeries(rawDict, rangeOpt) {
 
   const now = new Date();
   const cutoffs = {
+    '1D':  prevTradingDays(now, 1),
+    '3D':  prevTradingDays(now, 3),
     '1W':  new Date(now - 7  * 86400000),
     '1M':  new Date(now - 30 * 86400000),
     '3M':  new Date(now - 90 * 86400000),
@@ -117,6 +120,11 @@ export async function initPerformance(run) {
     return;
   }
 
+  if (!run.portfolio?.length) {
+    view.innerHTML = `<div class="empty-state">The latest run has no consensus holdings — no ticker was picked by two or more members. Run the full committee (all three members) to see performance data.</div>`;
+    return;
+  }
+
   let rangeOpt = '1Y';
   let perf = null;
 
@@ -125,7 +133,7 @@ export async function initPerformance(run) {
       Performance
     </div>
     <div style="display:flex;gap:4px;margin-bottom:24px;" id="range-pills">
-      ${['1W','1M','3M','YTD','1Y'].map(r => `
+      ${['1D','3D','1W','1M','3M','YTD','1Y'].map(r => `
         <button class="range-pill${r === rangeOpt ? ' active' : ''}" data-range="${r}"
           style="font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.06em;padding:5px 12px;border-radius:5px;border:1px solid var(--border);color:var(--text-3);background:transparent;cursor:pointer;transition:all 0.15s;"
         >${r}</button>`).join('')}

@@ -1,16 +1,19 @@
 """End-to-end test using a small hardcoded screened list instead of Finviz.
 
 Run from outside Claude Code (safe-chain proxy blocks Anthropic API):
-    uv run python run_e2e_test.py
+    uv run python scripts/run_e2e_test.py
 """
 
 import asyncio
 import json
 import os
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import anthropic
 from dotenv import load_dotenv

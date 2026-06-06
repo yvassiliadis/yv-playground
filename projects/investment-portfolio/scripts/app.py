@@ -2,8 +2,11 @@ import asyncio
 import base64
 import html as _html
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import anthropic
 import pandas as pd

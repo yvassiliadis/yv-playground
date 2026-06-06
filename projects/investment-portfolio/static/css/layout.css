@@ -106,6 +106,80 @@
 }
 .nav-ask-btn:hover { background: rgba(212,160,39,0.2); }
 
+/* ── Nav More dropdown ── */
+.nav-dropdown-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.nav-dropdown-btn {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--text-4);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.nav-dropdown-btn:hover { color: var(--text-3); }
+.nav-dropdown-btn.has-active { color: var(--text); border-bottom-color: var(--amber); }
+
+.nav-dropdown-caret { font-size: 0.55em; opacity: 0.6; }
+
+.nav-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-bright);
+  border-radius: 6px;
+  min-width: 140px;
+  z-index: 100;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+.nav-dropdown-menu.open { display: block; }
+
+.nav-dropdown-item {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--text-4);
+  padding: 9px 16px;
+  transition: color 0.15s, background 0.15s;
+}
+.nav-dropdown-item:hover { color: var(--text-3); background: var(--surface); }
+.nav-dropdown-item.active { color: var(--text); background: var(--surface); }
+
+/* ── Nav gear button ── */
+.nav-gear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--text-4);
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.nav-gear-btn:hover { color: var(--text-3); border-color: var(--border); background: var(--surface); }
+.nav-gear-btn.active { color: var(--amber); border-color: var(--amber-glow); background: var(--amber-dim); }
+
 /* ── Run age badge in nav ── */
 .nav-age {
   font-family: var(--font-mono);

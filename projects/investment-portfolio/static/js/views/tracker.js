@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { showToast } from '../app.js';
+import { prevTradingDays } from '../dates.js';
 
 let chartInstance = null;
 
@@ -18,13 +19,14 @@ function filterSeries(rawDict, rangeOpt) {
     .map(([k, v]) => [new Date(k), v])
     .sort((a, b) => a[0] - b[0]);
   if (!entries.length) return { labels: [], values: [] };
+  const now = new Date();
   const cutoffs = {
-    '1D':  new Date(Date.now() - 1  * 86400000),
-    '3D':  new Date(Date.now() - 3  * 86400000),
-    '1W':  new Date(Date.now() - 7  * 86400000),
-    '1M':  new Date(Date.now() - 30 * 86400000),
-    '3M':  new Date(Date.now() - 90 * 86400000),
-    'YTD': new Date(new Date().getFullYear(), 0, 1),
+    '1D':  prevTradingDays(now, 1),
+    '3D':  prevTradingDays(now, 3),
+    '1W':  new Date(now - 7  * 86400000),
+    '1M':  new Date(now - 30 * 86400000),
+    '3M':  new Date(now - 90 * 86400000),
+    'YTD': new Date(now.getFullYear(), 0, 1),
     '1Y':  null,
   };
   const cutoff = cutoffs[rangeOpt] ?? null;
@@ -209,7 +211,7 @@ function renderChart(perfData, rangeOpt) {
   });
 
   // Benchmarks
-  const BENCH = { spy: { color: '#7a6e5c', dash: [3, 3] }, vti: { color: '#8b7355', dash: [2, 4] } };
+  const BENCH = { spy: { color: '#94a3b8', dash: [6, 4] }, vti: { color: '#c4a060', dash: [2, 4] } };
   Object.entries(BENCH).forEach(([key, style]) => {
     if (!perfData[key]) return;
     const { labels, values } = filterSeries(perfData[key].series, rangeOpt);

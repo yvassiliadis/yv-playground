@@ -73,6 +73,8 @@ async def trigger_run():
 
 @app.get("/api/performance")
 async def get_performance(tickers: str, weights: str):
+    if not tickers or not weights:
+        raise HTTPException(status_code=400, detail="No portfolio holdings to analyze")
     try:
         ticker_list = tickers.split(",")
         weight_list = [float(w) for w in weights.split(",")]
