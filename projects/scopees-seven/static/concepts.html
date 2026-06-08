@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scopee's Seven — Aesthetic Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Boogaloo&family=Nunito:wght@400;600;700;800;900&family=Righteous&family=Space+Mono:wght@400;700&family=Poppins:wght@400;600;700;800;900&display=swap" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #2a2a2a;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    .page-header {
+      text-align: center;
+      font-family: system-ui, sans-serif;
+      color: #888;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .concepts-wrap {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .concept-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .concept-label {
+      font-family: system-ui, sans-serif;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #666;
+    }
+
+    .concept-name {
+      font-family: system-ui, sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ccc;
+      margin-bottom: 0.25rem;
+    }
+
+    .mock {
+      border-radius: 12px;
+      overflow: hidden;
+      padding: 1.25rem;
+    }
+
+    /* ===================== CONCEPT A: VINTAGE BOARD GAME ===================== */
+    .mock-a {
+      background: #FFF5DC;
+      font-family: 'Nunito', sans-serif;
+      color: #2D1B00;
+      border: 3px solid #2D1B00;
+      box-shadow: 6px 6px 0 #2D1B00;
+    }
+
+    .a-title {
+      font-family: 'Boogaloo', cursive;
+      font-size: 3.8rem;
+      color: #E63946;
+      line-height: 1;
+      text-align: center;
+      margin-bottom: 0.1rem;
+      text-shadow: 4px 4px 0 rgba(0,0,0,0.12);
+    }
+
+    .a-subtitle {
+      text-align: center;
+      font-size: 0.6rem;
+      font-weight: 900;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #8B6914;
+      margin-bottom: 1rem;
+    }
+
+    .a-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #FFB703;
+      margin: 0 -1.25rem 1rem;
+      padding: 0.45rem 1.25rem;
+      border-top: 2.5px solid #2D1B00;
+      border-bottom: 2.5px solid #2D1B00;
+    }
+
+    .a-round { font-family: 'Boogaloo', cursive; font-size: 1rem; color: #2D1B00; }
+    .a-deck  { font-size: 0.65rem; font-weight: 800; color: #2D1B00; opacity: 0.65; }
+
+    .a-player {
+      background: white;
+      border: 2.5px solid #2D1B00;
+      border-radius: 10px;
+      box-shadow: 3px 3px 0 rgba(0,0,0,0.18);
+      padding: 0.6rem 0.7rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .a-player.active {
+      border-color: #E63946;
+      box-shadow: 3px 3px 0 #E63946;
+      background: #FFF5F5;
+    }
+
+    .a-player.busted { opacity: 0.55; }
+
+    .a-player-top {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .a-player-name { font-weight: 800; font-size: 0.88rem; flex: 1; }
+
+    .a-badge {
+      font-size: 0.5rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+    }
+    .a-badge.active { background: #E63946; color: white; }
+    .a-badge.bust   { background: #888; color: white; }
+    .a-badge.stay   { background: #2DC653; color: white; }
+
+    .a-score {
+      font-family: 'Boogaloo', cursive;
+      font-size: 1.35rem;
+      color: #E63946;
+    }
+
+    .a-cards { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+    .a-card {
+      width: 36px;
+      height: 52px;
+      background: white;
+      border: 2px solid #2D1B00;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Boogaloo', cursive;
+      font-size: 1.4rem;
+      color: #E63946;
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.12);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .a-card .pip {
+      position: absolute;
+      top: 2px; left: 3px;
+      font-size: 0.42rem;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      color: #2D1B00;
+      line-height: 1;
+    }
+
+    .a-card.mod { color: #1a7a3a; border-color: #2DC653; }
+    .a-card.mod .pip { color: #1a7a3a; }
+
+    .a-card.down {
+      background: repeating-linear-gradient(
+        45deg,
+        #FFB703,
+        #FFB703 4px,
+        #fff9e0 4px,
+        #fff9e0 10px
+      );
+      border-color: #c87800;
+    }
+
+    .a-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+    }
+
+    .a-btn {
+      flex: 1;
+      padding: 0.65rem;
+      border: 2.5px solid #2D1B00;
+      border-radius: 50px;
+      font-family: 'Boogaloo', cursive;
+      font-size: 1.05rem;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 #2D1B00;
+      letter-spacing: 0.02em;
+    }
+    .a-btn.flip { background: #E63946; color: white; }
+    .a-btn.stay { background: #2DC653; color: white; }
+
+
+    /* ===================== CONCEPT B: NEON NIGHT ===================== */
+    .mock-b {
+      background: #0C0A18;
+      font-family: 'Space Mono', monospace;
+      color: #ede0cc;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #222;
+    }
+
+    .mock-b::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,20,147,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,20,147,0.025) 1px, transparent 1px);
+      background-size: 22px 22px;
+      pointer-events: none;
+    }
+
+    .b-title {
+      font-family: 'Righteous', cursive;
+      font-size: 3rem;
+      color: #FF006E;
+      text-align: center;
+      line-height: 1;
+      margin-bottom: 0.15rem;
+      text-shadow:
+        0 0 8px rgba(255,0,110,0.9),
+        0 0 25px rgba(255,0,110,0.5),
+        0 0 55px rgba(255,0,110,0.25);
+      letter-spacing: 0.1em;
+      position: relative;
+    }
+
+    .b-subtitle {
+      text-align: center;
+      font-size: 0.5rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(255,190,11,0.5);
+      margin-bottom: 1rem;
+      position: relative;
+    }
+
+    .b-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(255,0,110,0.15);
+      position: relative;
+    }
+
+    .b-round {
+      font-family: 'Righteous', cursive;
+      font-size: 0.85rem;
+      color: #FFBE0B;
+      text-shadow: 0 0 8px rgba(255,190,11,0.6);
+    }
+
+    .b-deck { font-size: 0.58rem; color: rgba(240,230,211,0.35); letter-spacing: 0.1em; }
+
+    .b-player {
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.055);
+      border-radius: 3px;
+      padding: 0.6rem 0.7rem;
+      margin-bottom: 0.45rem;
+      position: relative;
+    }
+
+    .b-player.active {
+      border-color: rgba(255,0,110,0.5);
+      background: rgba(255,0,110,0.04);
+      box-shadow: inset 3px 0 0 #FF006E, 0 0 18px rgba(255,0,110,0.07);
+    }
+
+    .b-player.busted { opacity: 0.38; }
+
+    .b-player-top {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.38rem;
+    }
+
+    .b-player-name { font-size: 0.75rem; flex: 1; letter-spacing: 0.04em; }
+
+    .b-badge {
+      font-size: 0.48rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.1rem 0.35rem;
+      border-radius: 2px;
+    }
+    .b-badge.active { background: rgba(255,0,110,0.18); color: #FF006E; border: 1px solid rgba(255,0,110,0.4); }
+    .b-badge.bust   { color: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.08); }
+    .b-badge.stay   { background: rgba(0,200,100,0.1); color: #00c864; border: 1px solid rgba(0,200,100,0.3); }
+
+    .b-score {
+      font-family: 'Righteous', cursive;
+      font-size: 1.2rem;
+      color: #FFBE0B;
+      text-shadow: 0 0 10px rgba(255,190,11,0.65);
+    }
+
+    .b-cards { display: flex; gap: 0.28rem; flex-wrap: wrap; }
+
+    .b-card {
+      width: 34px;
+      height: 50px;
+      background: #17122a;
+      border: 1px solid rgba(255,0,110,0.28);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Righteous', cursive;
+      font-size: 1.2rem;
+      color: #FFBE0B;
+      text-shadow: 0 0 7px rgba(255,190,11,0.55);
+      box-shadow: 0 0 8px rgba(255,0,110,0.08), inset 0 0 8px rgba(255,0,110,0.03);
+      flex-shrink: 0;
+    }
+
+    .b-card.mod { color: #00c864; border-color: rgba(0,200,100,0.35); text-shadow: 0 0 7px rgba(0,200,100,0.5); }
+
+    .b-card.down {
+      background: #17122a;
+      border-color: rgba(255,0,110,0.12);
+      background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255,0,110,0.04),
+        rgba(255,0,110,0.04) 2px,
+        transparent 2px,
+        transparent 8px
+      );
+    }
+
+    .b-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.7rem;
+      position: relative;
+    }
+
+    .b-btn {
+      flex: 1;
+      padding: 0.6rem;
+      border-radius: 3px;
+      font-family: 'Righteous', cursive;
+      font-size: 0.9rem;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      border: none;
+    }
+    .b-btn.flip {
+      background: #FF006E;
+      color: white;
+      box-shadow: 0 0 14px rgba(255,0,110,0.45), 0 0 28px rgba(255,0,110,0.18);
+    }
+    .b-btn.stay {
+      background: transparent;
+      color: #FFBE0B;
+      border: 1px solid rgba(255,190,11,0.35);
+      box-shadow: 0 0 8px rgba(255,190,11,0.08);
+    }
+
+
+    /* ===================== CONCEPT C: BRIGHT PLAYGROUND ===================== */
+    .mock-c {
+      background: #FFFFFF;
+      font-family: 'Poppins', sans-serif;
+      color: #1a1a2e;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+    }
+
+    .c-title {
+      font-family: 'Poppins', sans-serif;
+      font-weight: 900;
+      font-size: 3.4rem;
+      line-height: 1;
+      text-align: center;
+      margin-bottom: 0.15rem;
+      background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .c-subtitle {
+      text-align: center;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #ccc;
+      margin-bottom: 1rem;
+    }
+
+    .c-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #FFF2F2;
+      border-radius: 10px;
+      padding: 0.45rem 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+
+    .c-round { font-weight: 700; font-size: 0.82rem; color: #FF6B6B; }
+    .c-deck  { font-size: 0.62rem; font-weight: 600; color: #bbb; }
+
+    .c-player {
+      background: #F7F8FD;
+      border-radius: 14px;
+      padding: 0.6rem 0.7rem;
+      margin-bottom: 0.45rem;
+      border: 2px solid transparent;
+    }
+
+    .c-player.active { border-color: #FF6B6B; background: #FFF5F5; }
+    .c-player.busted { opacity: 0.4; }
+
+    .c-player-top {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .c-player-name { font-weight: 700; font-size: 0.85rem; flex: 1; }
+
+    .c-badge {
+      font-size: 0.5rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 0.12rem 0.45rem;
+      border-radius: 50px;
+    }
+    .c-badge.active { background: #FFE5E5; color: #FF6B6B; }
+    .c-badge.bust   { background: #eee; color: #aaa; }
+    .c-badge.stay   { background: #E5F7EE; color: #2DC653; }
+
+    .c-score {
+      font-weight: 900;
+      font-size: 1.2rem;
+      color: #FF6B6B;
+    }
+
+    .c-cards { display: flex; gap: 0.28rem; flex-wrap: wrap; }
+
+    .c-card {
+      width: 34px;
+      height: 50px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.15rem;
+      color: white;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+    }
+
+    .c-card.red    { background: linear-gradient(150deg, #FF6B6B, #FF4757); }
+    .c-card.teal   { background: linear-gradient(150deg, #4ECDC4, #26a69a); }
+    .c-card.purple { background: linear-gradient(150deg, #A29BFE, #6C5CE7); }
+    .c-card.orange { background: linear-gradient(150deg, #FFA07A, #FF6B35); }
+    .c-card.mod    { background: linear-gradient(150deg, #55efc4, #00b894); font-size: 0.7rem; }
+    .c-card.down   { background: linear-gradient(150deg, #dfe6e9, #b2bec3); color: #999; font-size: 1rem; }
+
+    .c-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.65rem;
+    }
+
+    .c-btn {
+      flex: 1;
+      padding: 0.72rem;
+      border-radius: 50px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 800;
+      font-size: 0.88rem;
+      cursor: pointer;
+      border: none;
+      letter-spacing: 0.02em;
+    }
+    .c-btn.flip {
+      background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+      color: white;
+      box-shadow: 0 4px 14px rgba(255,107,107,0.38);
+    }
+    .c-btn.stay {
+      background: #F0F4FF;
+      color: #6C5CE7;
+      border: 2px solid #E0E8FF;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-header">Scopee's Seven — Aesthetic Concepts</div>
+
+<div class="concepts-wrap">
+
+  <!-- ===== OPTION A: VINTAGE BOARD GAME ===== -->
+  <div class="concept-column">
+    <div class="concept-label">Option A</div>
+    <div class="concept-name">Vintage Board Game</div>
+    <div class="mock mock-a">
+
+      <div class="a-title">Scopee's Seven</div>
+      <div class="a-subtitle">Card Game · 2–7 Players</div>
+
+      <div class="a-header">
+        <span class="a-round">Round 2</span>
+        <span class="a-deck">34 cards left</span>
+      </div>
+
+      <div class="a-player active">
+        <div class="a-player-top">
+          <span class="a-player-name">Alice</span>
+          <span class="a-badge active">Your turn</span>
+          <span class="a-score">15</span>
+        </div>
+        <div class="a-cards">
+          <div class="a-card"><span class="pip">2</span>2</div>
+          <div class="a-card"><span class="pip">5</span>5</div>
+          <div class="a-card"><span class="pip">8</span>8</div>
+          <div class="a-card down"></div>
+        </div>
+      </div>
+
+      <div class="a-player">
+        <div class="a-player-top">
+          <span class="a-player-name">Bob</span>
+          <span class="a-badge stay">Stayed</span>
+          <span class="a-score">20</span>
+        </div>
+        <div class="a-cards">
+          <div class="a-card"><span class="pip">3</span>3</div>
+          <div class="a-card"><span class="pip">7</span>7</div>
+          <div class="a-card"><span class="pip">0</span>0</div>
+          <div class="a-card mod"><span class="pip">+2</span>+2</div>
+        </div>
+      </div>
+
+      <div class="a-player busted">
+        <div class="a-player-top">
+          <span class="a-player-name">Charlie</span>
+          <span class="a-badge bust">Bust</span>
+          <span class="a-score" style="color:#bbb">—</span>
+        </div>
+        <div class="a-cards">
+          <div class="a-card"><span class="pip">4</span>4</div>
+          <div class="a-card"><span class="pip">4</span>4</div>
+          <div class="a-card"><span class="pip">9</span>9</div>
+        </div>
+      </div>
+
+      <div class="a-actions">
+        <button class="a-btn flip">Flip!</button>
+        <button class="a-btn stay">Stay</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== OPTION B: NEON NIGHT ===== -->
+  <div class="concept-column">
+    <div class="concept-label">Option B</div>
+    <div class="concept-name">Neon Night</div>
+    <div class="mock mock-b">
+
+      <div class="b-title">FLIP 7</div>
+      <div class="b-subtitle">THE CARD GAME</div>
+
+      <div class="b-header">
+        <span class="b-round">Round 2</span>
+        <span class="b-deck">34 cards left</span>
+      </div>
+
+      <div class="b-player active">
+        <div class="b-player-top">
+          <span class="b-player-name">Alice</span>
+          <span class="b-badge active">playing</span>
+          <span class="b-score">15</span>
+        </div>
+        <div class="b-cards">
+          <div class="b-card">2</div>
+          <div class="b-card">5</div>
+          <div class="b-card">8</div>
+          <div class="b-card down"></div>
+        </div>
+      </div>
+
+      <div class="b-player">
+        <div class="b-player-top">
+          <span class="b-player-name">Bob</span>
+          <span class="b-badge stay">stayed</span>
+          <span class="b-score">20</span>
+        </div>
+        <div class="b-cards">
+          <div class="b-card">3</div>
+          <div class="b-card">7</div>
+          <div class="b-card">0</div>
+          <div class="b-card mod">+2</div>
+        </div>
+      </div>
+
+      <div class="b-player busted">
+        <div class="b-player-top">
+          <span class="b-player-name">Charlie</span>
+          <span class="b-badge bust">bust</span>
+          <span class="b-score" style="color:rgba(255,255,255,0.18)">—</span>
+        </div>
+        <div class="b-cards">
+          <div class="b-card">4</div>
+          <div class="b-card">4</div>
+          <div class="b-card">9</div>
+        </div>
+      </div>
+
+      <div class="b-actions">
+        <button class="b-btn flip">FLIP</button>
+        <button class="b-btn stay">STAY</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== OPTION C: BRIGHT PLAYGROUND ===== -->
+  <div class="concept-column">
+    <div class="concept-label">Option C</div>
+    <div class="concept-name">Bright Playground</div>
+    <div class="mock mock-c">
+
+      <div class="c-title">Scopee's Seven</div>
+      <div class="c-subtitle">Flip · Risk · Win</div>
+
+      <div class="c-header">
+        <span class="c-round">Round 2</span>
+        <span class="c-deck">34 cards left</span>
+      </div>
+
+      <div class="c-player active">
+        <div class="c-player-top">
+          <span class="c-player-name">Alice</span>
+          <span class="c-badge active">your turn</span>
+          <span class="c-score">15</span>
+        </div>
+        <div class="c-cards">
+          <div class="c-card red">2</div>
+          <div class="c-card teal">5</div>
+          <div class="c-card purple">8</div>
+          <div class="c-card down">?</div>
+        </div>
+      </div>
+
+      <div class="c-player">
+        <div class="c-player-top">
+          <span class="c-player-name">Bob</span>
+          <span class="c-badge stay">stayed</span>
+          <span class="c-score">20</span>
+        </div>
+        <div class="c-cards">
+          <div class="c-card orange">3</div>
+          <div class="c-card red">7</div>
+          <div class="c-card teal">0</div>
+          <div class="c-card mod">+2</div>
+        </div>
+      </div>
+
+      <div class="c-player busted">
+        <div class="c-player-top">
+          <span class="c-player-name">Charlie</span>
+          <span class="c-badge bust">bust</span>
+          <span class="c-score" style="color:#ddd">—</span>
+        </div>
+        <div class="c-cards">
+          <div class="c-card red">4</div>
+          <div class="c-card red">4</div>
+          <div class="c-card purple">9</div>
+        </div>
+      </div>
+
+      <div class="c-actions">
+        <button class="c-btn flip">Flip!</button>
+        <button class="c-btn stay">Stay</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

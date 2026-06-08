@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scopee's Seven — Design Mock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:          #0c0c14;
+      --surface:     #12121e;
+      --surface2:    #1a1a2e;
+      --card-bg:     #faf6ed;
+      --card-border: #c8a96e;
+      --gold:        #c9a44a;
+      --gold-bright: #e8c470;
+      --gold-dim:    rgba(201, 164, 74, 0.25);
+      --crimson:     #7a1a1a;
+      --crimson-bright: #c0392b;
+      --green-mod:   #1a4a2a;
+      --green-text:  #3d9e5a;
+      --blue-action: #1a2a4a;
+      --blue-text:   #5a8acc;
+      --cream:       #e8dcc8;
+      --cream-dim:   rgba(232, 220, 200, 0.45);
+      --muted:       #5a5068;
+      --border:      rgba(201, 164, 74, 0.18);
+      --shadow-card: 0 4px 18px rgba(0,0,0,0.6), 0 1px 4px rgba(0,0,0,0.4);
+      --shadow-panel: 0 8px 40px rgba(0,0,0,0.5);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      /* Art Deco diamond grid */
+      background-image:
+        linear-gradient(45deg, var(--surface) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--surface) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--surface) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--surface) 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+      min-height: 100vh;
+      font-family: 'Courier Prime', monospace;
+      color: var(--cream);
+      /* Grain overlay */
+      position: relative;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      opacity: 0.6;
+      z-index: 9999;
+    }
+
+    /* ── NAV ── */
+    .mock-nav {
+      position: fixed;
+      top: 1rem;
+      right: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 10000;
+    }
+    .mock-nav button {
+      font-family: 'Courier Prime', monospace;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0.3rem 0.7rem;
+      background: rgba(201,164,74,0.12);
+      border: 1px solid var(--border);
+      color: var(--gold);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .mock-nav button.active { background: var(--gold); color: var(--bg); }
+
+    /* ── SCREENS ── */
+    .screen { display: none; max-width: 960px; margin: 0 auto; padding: 3rem 2rem 4rem; }
+    .screen.visible { display: block; }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       SETUP SCREEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .setup-wrap {
+      max-width: 500px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .game-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 7rem;
+      font-weight: 700;
+      font-style: italic;
+      color: var(--gold);
+      line-height: 0.9;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.3rem;
+      text-shadow: 0 0 60px rgba(201,164,74,0.3);
+    }
+
+    .game-subtitle {
+      font-size: 0.65rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 3rem;
+    }
+
+    .ornament {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+      color: var(--gold-dim);
+    }
+    .ornament::before, .ornament::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--gold-dim), transparent);
+    }
+    .ornament span { font-size: 0.8rem; color: var(--gold); }
+
+    .setup-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 2rem;
+      box-shadow: var(--shadow-panel);
+      text-align: left;
+    }
+
+    .setup-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    .player-count-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+      padding-bottom: 1.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .count-ctrl { display: flex; align-items: center; gap: 1.25rem; }
+    .count-btn {
+      width: 34px;
+      height: 34px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--gold);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .count-btn:hover { border-color: var(--gold); background: rgba(201,164,74,0.06); }
+    .dealer-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: var(--gold);
+      color: var(--bg);
+      font-size: 0.62rem;
+      font-weight: 700;
+      font-family: 'Courier Prime', monospace;
+      border-radius: 50%;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+      letter-spacing: 0;
+      box-shadow: 0 0 10px rgba(201,164,74,0.55), inset 0 0 0 2px rgba(255,255,255,0.2);
+    }
+    .count-val {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.5rem;
+      font-weight: 600;
+      color: var(--cream);
+      min-width: 2rem;
+      text-align: center;
+    }
+
+    .name-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem; }
+    .name-row { display: flex; align-items: center; gap: 0.75rem; }
+    .name-icon { font-size: 0.9rem; width: 1.5rem; text-align: center; flex-shrink: 0; }
+    .name-tag {
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      width: 50px;
+      flex-shrink: 0;
+    }
+    .name-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 0.35rem 0;
+      font-family: 'Courier Prime', monospace;
+      font-size: 0.9rem;
+      color: var(--cream);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .name-input:focus { border-color: var(--gold); }
+
+    .deal-btn {
+      width: 100%;
+      padding: 1rem;
+      background: var(--gold);
+      border: none;
+      border-radius: 2px;
+      font-family: 'Courier Prime', monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--bg);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .deal-btn:hover { background: var(--gold-bright); }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       CARD COMPONENT
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .card {
+      width: 50px;
+      height: 72px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      box-shadow: var(--shadow-card);
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .card-val {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.7rem;
+      font-weight: 700;
+      color: #1a1208;
+      line-height: 1;
+    }
+
+    /* Corner pips */
+    .card::before, .card::after {
+      content: attr(data-val);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: #4a3a20;
+      position: absolute;
+      line-height: 1;
+    }
+    .card::before { top: 3px; left: 4px; }
+    .card::after  { bottom: 3px; right: 4px; transform: rotate(180deg); }
+
+    /* Modifier card */
+    .card.mod {
+      background: #edf7f0;
+      border-color: #5aab70;
+    }
+    .card.mod .card-val {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #1a5a30;
+      font-family: 'Courier Prime', monospace;
+    }
+    .card.mod::before, .card.mod::after { color: #3a8050; }
+
+    /* Action card */
+    .card.action {
+      background: #f0eef8;
+      border-color: #8878c0;
+    }
+    .card.action .card-val {
+      font-size: 0.6rem;
+      font-weight: 700;
+      color: #3a2a7a;
+      font-family: 'Courier Prime', monospace;
+      text-align: center;
+      line-height: 1.3;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card.action::before, .card.action::after { color: #6a5aaa; }
+
+    /* Zero card — lighter numeral since it's worth nothing */
+    .card.zero .card-val { color: #9a8a6a; font-style: italic; }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       GAME SCREEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .round-label {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.4rem;
+      font-style: italic;
+      font-weight: 400;
+      color: var(--gold);
+    }
+
+    .deck-count {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .status-bar {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--cream-dim);
+      margin-bottom: 1.5rem;
+    }
+    .status-bar.highlight { color: var(--gold); }
+
+    /* Player rows */
+    .player-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.75rem; }
+
+    .player-row {
+      background: var(--surface);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 2px;
+      padding: 0.75rem 1rem;
+      transition: border-color 0.15s;
+    }
+
+    .player-row.is-current {
+      border-color: rgba(201,164,74,0.35);
+      box-shadow: inset 3px 0 0 var(--gold), 0 0 20px rgba(201,164,74,0.06);
+    }
+
+    .player-row.is-busted {
+      opacity: 0.32;
+    }
+
+    .player-row.is-stayed { opacity: 0.55; }
+
+    .player-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .player-name {
+      font-size: 0.85rem;
+      flex: 1;
+      color: var(--cream);
+    }
+
+    .player-badge {
+      font-size: 0.58rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.5rem;
+      border-radius: 2px;
+    }
+    .badge-active { background: rgba(58,158,90,0.18); color: #5dbe7a; border: 1px solid rgba(58,158,90,0.25); }
+    .badge-stay   { background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid rgba(255,255,255,0.08); }
+    .badge-bust   { background: rgba(192,57,43,0.15); color: #c0392b; border: 1px solid rgba(192,57,43,0.2); }
+
+    .player-pts {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--gold);
+    }
+
+    /* Two-row card layout: modifiers + kept actions above, numbers below */
+    .player-cards { display: flex; flex-direction: column; gap: 0.35rem; min-height: 72px; }
+    .cards-top { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; min-height: 24px; }
+    .cards-bottom { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+    .no-cards { font-size: 0.7rem; color: var(--muted); align-self: center; }
+
+    /* Action area */
+    .action-area { display: flex; gap: 0.75rem; }
+    .action-btn {
+      flex: 1;
+      padding: 0.9rem;
+      border-radius: 2px;
+      font-family: 'Courier Prime', monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-hit {
+      background: var(--gold);
+      color: var(--bg);
+    }
+    .btn-hit:hover { background: var(--gold-bright); }
+
+    .btn-stay {
+      background: transparent;
+      color: var(--cream-dim);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .btn-stay:hover { border-color: var(--cream-dim); color: var(--cream); }
+
+    .btn-disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* ── Targeting mode ── */
+
+    /* When targeting is active, non-targetable rows recede */
+    .targeting-active .player-row.is-busted,
+    .targeting-active .player-row.is-stayed {
+      opacity: 0.18;
+      pointer-events: none;
+    }
+
+    /* Active rows become clickable targets */
+    .targeting-active .player-row:not(.is-busted):not(.is-stayed) {
+      cursor: pointer;
+      border-color: rgba(201,164,74,0.25);
+      animation: targetPulse 2s ease-in-out infinite;
+    }
+    .targeting-active .player-row:not(.is-busted):not(.is-stayed):hover {
+      border-color: var(--gold);
+      background: rgba(201,164,74,0.06);
+      animation: none;
+    }
+    .targeting-active .player-row:not(.is-busted):not(.is-stayed):hover .target-badge {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes targetPulse {
+      0%, 100% { border-color: rgba(201,164,74,0.2); }
+      50%       { border-color: rgba(201,164,74,0.5); }
+    }
+
+    /* Badge that appears on hover in targeting mode */
+    .target-badge {
+      position: absolute;
+      top: 50%;
+      right: 1rem;
+      transform: translateY(4px);
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      background: rgba(12,12,20,0.9);
+      border: 1px solid rgba(201,164,74,0.4);
+      padding: 0.2rem 0.55rem;
+      border-radius: 2px;
+      opacity: 0;
+      transition: opacity 0.12s, transform 0.12s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* Player row needs position:relative for the badge */
+    .player-row { position: relative; }
+
+    /* Action hint shown in place of Hit/Stay during targeting */
+    .target-hint {
+      text-align: center;
+      padding: 0.9rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px dashed rgba(201,164,74,0.25);
+      border-radius: 2px;
+    }
+    .target-hint::before { content: '↑  '; }
+    .target-hint::after  { content: '  ↑'; }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       SCORE SCREEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .score-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.5rem;
+      font-style: italic;
+      font-weight: 400;
+      color: var(--cream);
+      margin-bottom: 0.25rem;
+    }
+    .score-subtitle {
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .score-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+    }
+
+    .score-table thead th {
+      font-size: 0.58rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 0.75rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-weight: 400;
+    }
+    .score-table thead th:not(:first-child) { text-align: right; }
+
+    .score-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .score-table tbody tr:last-child { border-bottom: none; }
+
+    .score-table td {
+      padding: 0.85rem 0.75rem;
+      font-size: 0.88rem;
+    }
+    .score-table td:not(:first-child) { text-align: right; }
+
+    .td-name { color: var(--cream); }
+    .td-bust { color: var(--muted); font-style: italic; }
+    .td-round { color: var(--cream); }
+    .td-bonus { color: var(--gold); font-size: 0.78rem; }
+    .td-total {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--gold);
+    }
+
+    .score-progress {
+      margin-bottom: 2rem;
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .progress-track {
+      height: 3px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      position: relative;
+      margin-bottom: 0.4rem;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--gold-dim), var(--gold));
+      border-radius: 2px;
+      position: relative;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: -3px;
+      width: 9px;
+      height: 9px;
+      background: var(--gold);
+      border-radius: 50%;
+    }
+
+    .next-btn {
+      width: 100%;
+      padding: 1rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-family: 'Courier Prime', monospace;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .next-btn:hover { background: var(--gold-dim); border-color: var(--gold); }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       GAME OVER SCREEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .gameover-wrap { max-width: 540px; margin: 0 auto; text-align: center; }
+
+    .winner-frame {
+      border: 1px solid rgba(201,164,74,0.3);
+      padding: 3rem 2.5rem;
+      margin-bottom: 2rem;
+      position: relative;
+      background: var(--surface);
+    }
+
+    /* Art Deco corner ornaments */
+    .winner-frame::before, .winner-frame::after {
+      content: '◆';
+      position: absolute;
+      color: var(--gold);
+      font-size: 0.7rem;
+      opacity: 0.5;
+    }
+    .winner-frame::before { top: 0.5rem; left: 0.75rem; }
+    .winner-frame::after  { bottom: 0.5rem; right: 0.75rem; }
+
+    .winner-eyebrow {
+      font-size: 0.6rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+
+    .winner-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 4.5rem;
+      font-style: italic;
+      font-weight: 700;
+      color: var(--cream);
+      line-height: 1;
+      margin-bottom: 0.75rem;
+    }
+
+    .winner-pts {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--gold);
+    }
+
+    .standings { text-align: left; margin-bottom: 2.5rem; }
+    .standing-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .standing-rank {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-style: italic;
+      color: var(--muted);
+      width: 1.5rem;
+    }
+    .standing-name { flex: 1; font-size: 0.88rem; color: var(--cream); }
+    .standing-pts {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--gold);
+    }
+    .standing-row:first-child .standing-rank { color: var(--gold); }
+
+    .again-btn {
+      width: 100%;
+      padding: 1rem;
+      background: var(--gold);
+      border: none;
+      border-radius: 2px;
+      font-family: 'Courier Prime', monospace;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--bg);
+      cursor: pointer;
+    }
+    .again-btn:hover { background: var(--gold-bright); }
+  </style>
+</head>
+<body>
+
+<!-- Mock navigation -->
+<nav class="mock-nav">
+  <button onclick="show('setup')"   id="nav-setup"   class="active">Setup</button>
+  <button onclick="show('game')"    id="nav-game">Game</button>
+  <button onclick="show('score')"   id="nav-score">Score</button>
+  <button onclick="show('gameover')"id="nav-gameover">Game Over</button>
+</nav>
+
+<!-- ════════════════════════════════════════
+     SETUP SCREEN
+════════════════════════════════════════ -->
+<section class="screen visible" id="screen-setup">
+  <div class="setup-wrap">
+    <h1 class="game-title">Scopee's Seven</h1>
+    <p class="game-subtitle">A Press Your Luck Card Game</p>
+
+    <div class="ornament"><span>◆</span></div>
+
+    <div class="setup-panel">
+      <div class="player-count-row">
+        <span class="setup-label" style="margin:0">Number of Players</span>
+        <div class="count-ctrl">
+          <button class="count-btn">−</button>
+          <span class="count-val">4</span>
+          <button class="count-btn">+</button>
+        </div>
+      </div>
+
+      <span class="setup-label">Player Names</span>
+      <div class="name-list">
+        <div class="name-row">
+          <span class="name-icon">👤</span>
+          <span class="name-tag">You</span>
+          <input class="name-input" value="Yannis" />
+        </div>
+        <div class="name-row">
+          <span class="name-icon">🤖</span>
+          <span class="name-tag">Bot</span>
+          <input class="name-input" value="Player 2" />
+        </div>
+        <div class="name-row">
+          <span class="name-icon">🤖</span>
+          <span class="name-tag">Bot</span>
+          <input class="name-input" value="Player 3" />
+        </div>
+        <div class="name-row">
+          <span class="name-icon">🤖</span>
+          <span class="name-tag">Bot</span>
+          <input class="name-input" value="Player 4" />
+        </div>
+      </div>
+
+      <button class="deal-btn" onclick="show('game')">Deal Cards</button>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     GAME SCREEN
+════════════════════════════════════════ -->
+<section class="screen" id="screen-game">
+  <div class="game-header">
+    <span class="round-label">Round 2</span>
+    <span class="deck-count">🂠 61 cards remaining</span>
+  </div>
+
+  <p class="status-bar highlight" id="game-status">Your turn — Hit or Stay?</p>
+
+  <div class="player-list" id="player-list">
+
+    <!-- CURRENT PLAYER (human) -->
+    <div class="player-row is-current" onclick="handleTarget(this)">
+      <span class="target-badge">◆ Freeze</span>
+      <div class="player-meta">
+        <span class="player-name">👤 Yannis <span class="dealer-chip">D</span></span>
+        <span class="player-badge badge-active">Active</span>
+        <span class="player-pts">42 pts</span>
+      </div>
+      <div class="player-cards">
+        <div class="cards-top">
+          <div class="card mod" data-val="+4"><span class="card-val">+4</span></div>
+        </div>
+        <div class="cards-bottom">
+          <div class="card" data-val="3"><span class="card-val">3</span></div>
+          <div class="card" data-val="11"><span class="card-val">11</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI player - stayed -->
+    <div class="player-row is-stayed">
+      <div class="player-meta">
+        <span class="player-name">🤖 Player 2</span>
+        <span class="player-badge badge-stay">Stay</span>
+        <span class="player-pts">31 pts</span>
+      </div>
+      <div class="player-cards">
+        <div class="cards-top"></div>
+        <div class="cards-bottom">
+          <div class="card" data-val="5"><span class="card-val">5</span></div>
+          <div class="card" data-val="9"><span class="card-val">9</span></div>
+          <div class="card" data-val="7"><span class="card-val">7</span></div>
+          <div class="card" data-val="10"><span class="card-val">10</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI player - busted -->
+    <div class="player-row is-busted">
+      <div class="player-meta">
+        <span class="player-name">🤖 Player 3</span>
+        <span class="player-badge badge-bust">Bust</span>
+        <span class="player-pts">78 pts</span>
+      </div>
+      <div class="player-cards">
+        <span class="no-cards">— busted —</span>
+      </div>
+    </div>
+
+    <!-- AI player - active, has Second Chance -->
+    <div class="player-row" onclick="handleTarget(this)">
+      <span class="target-badge">◆ Freeze</span>
+      <div class="player-meta">
+        <span class="player-name">🤖 Player 4</span>
+        <span class="player-badge badge-active">Active</span>
+        <span class="player-pts">55 pts</span>
+      </div>
+      <div class="player-cards">
+        <div class="cards-top">
+          <div class="card action" data-val="2nd"><span class="card-val">2nd<br>Chance</span></div>
+        </div>
+        <div class="cards-bottom">
+          <div class="card zero" data-val="0"><span class="card-val">0</span></div>
+          <div class="card" data-val="2"><span class="card-val">2</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="action-area">
+    <div class="action-area">
+      <button class="action-btn btn-hit" onclick="enterTargeting()">Hit (draws Freeze…)</button>
+      <button class="action-btn btn-stay" onclick="show('score')">Stay</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════
+     SCORE SCREEN
+════════════════════════════════════════ -->
+<section class="screen" id="screen-score">
+  <h2 class="score-title">Round 2 Results</h2>
+  <p class="score-subtitle">First to 200 points wins</p>
+
+  <table class="score-table">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>This Round</th>
+        <th>Bonus</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="td-name">👤 Yannis</td>
+        <td class="td-round">28</td>
+        <td class="td-bonus">+4</td>
+        <td class="td-total">70</td>
+      </tr>
+      <tr>
+        <td class="td-name">🤖 Player 2</td>
+        <td class="td-round">31</td>
+        <td class="td-bonus"></td>
+        <td class="td-total">62</td>
+      </tr>
+      <tr>
+        <td class="td-name td-bust">🤖 Player 3</td>
+        <td class="td-bust">Bust</td>
+        <td class="td-bust"></td>
+        <td class="td-total" style="color:var(--muted)">78</td>
+      </tr>
+      <tr>
+        <td class="td-name">🤖 Player 4</td>
+        <td class="td-round">2</td>
+        <td class="td-bonus">🎯 +15</td>
+        <td class="td-total">57</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Progress bars toward 200 -->
+  <div class="score-progress">
+    <div style="margin-bottom:1.25rem;">
+      <div class="progress-label">
+        <span>👤 Yannis</span>
+        <span>70 / 200</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:35%"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <div class="progress-label">
+        <span>🤖 Player 2</span>
+        <span>62 / 200</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:31%"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <div class="progress-label">
+        <span>🤖 Player 3</span>
+        <span>78 / 200</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:39%"></div>
+      </div>
+    </div>
+    <div>
+      <div class="progress-label">
+        <span>🤖 Player 4</span>
+        <span>57 / 200</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:28.5%"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="next-btn" onclick="show('game')">Next Round →</button>
+</section>
+
+<!-- ════════════════════════════════════════
+     GAME OVER SCREEN
+════════════════════════════════════════ -->
+<section class="screen" id="screen-gameover">
+  <div class="gameover-wrap">
+    <div class="winner-frame">
+      <p class="winner-eyebrow">◆ Winner ◆</p>
+      <h1 class="winner-name">Yannis</h1>
+      <p class="winner-pts">214 points</p>
+    </div>
+
+    <div class="standings">
+      <div class="standing-row">
+        <span class="standing-rank">I</span>
+        <span class="standing-name">👤 Yannis</span>
+        <span class="standing-pts">214 pts</span>
+      </div>
+      <div class="standing-row">
+        <span class="standing-rank">II</span>
+        <span class="standing-name">🤖 Player 3</span>
+        <span class="standing-pts">187 pts</span>
+      </div>
+      <div class="standing-row">
+        <span class="standing-rank">III</span>
+        <span class="standing-name">🤖 Player 2</span>
+        <span class="standing-pts">154 pts</span>
+      </div>
+      <div class="standing-row">
+        <span class="standing-rank">IV</span>
+        <span class="standing-name">🤖 Player 4</span>
+        <span class="standing-pts">122 pts</span>
+      </div>
+    </div>
+
+    <button class="again-btn" onclick="show('setup')">Play Again</button>
+  </div>
+</section>
+
+<script>
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
+    document.querySelectorAll('.mock-nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('screen-' + id).classList.add('visible');
+    document.getElementById('nav-' + id).classList.add('active');
+    exitTargeting();
+    window.scrollTo(0, 0);
+  }
+
+  function enterTargeting() {
+    document.getElementById('player-list').classList.add('targeting-active');
+    document.getElementById('game-status').textContent = 'You drew Freeze — select a target above';
+    document.getElementById('action-area').innerHTML =
+      '<div class="target-hint">Select a target above</div>';
+  }
+
+  function exitTargeting() {
+    const list = document.getElementById('player-list');
+    if (list) list.classList.remove('targeting-active');
+    const status = document.getElementById('game-status');
+    if (status) status.textContent = 'Your turn — Hit or Stay?';
+    const area = document.getElementById('action-area');
+    if (area) area.innerHTML = `
+      <div class="action-area">
+        <button class="action-btn btn-hit" onclick="enterTargeting()">Hit (draws Freeze…)</button>
+        <button class="action-btn btn-stay" onclick="show('score')">Stay</button>
+      </div>`;
+  }
+
+  function handleTarget(row) {
+    const list = document.getElementById('player-list');
+    if (!list || !list.classList.contains('targeting-active')) return;
+    // In real app: call api.resolveAction(gameId, playerId)
+    exitTargeting();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scopee's Seven — Table Concept</title>
+  <link href="https://fonts.googleapis.com/css2?family=Boogaloo&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #F5E6C8;
+      --warm-dark: #3D2007;
+      --wood: #6B3E1A;
+      --wood-highlight: #9B6030;
+      --felt: #1A5C28;
+      --felt-light: #237532;
+      --gold: #E8A020;
+      --red: #C42020;
+      --blue: #1A55B0;
+      --orange: #E85D04;
+    }
+
+    body {
+      background-color: var(--cream);
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23C0A060' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
+      font-family: 'Boogaloo', cursive;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 20px 30px;
+      gap: 14px;
+    }
+
+    h1 {
+      font-size: 2.8rem;
+      color: var(--warm-dark);
+      letter-spacing: 0.08em;
+      text-shadow: 3px 3px 0 var(--cream), 4px 4px 0 var(--wood);
+    }
+
+    .controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .ctrl-label { color: var(--warm-dark); font-size: 1rem; }
+
+    .btn {
+      font-family: 'Boogaloo', cursive;
+      font-size: 1rem;
+      padding: 5px 14px;
+      border: 2.5px solid var(--wood);
+      border-radius: 8px;
+      background: #FFF8E7;
+      color: var(--warm-dark);
+      cursor: pointer;
+      transition: background 0.1s, transform 0.1s;
+      line-height: 1.2;
+    }
+    .btn:hover { background: #FFE8A0; transform: translateY(-1px); }
+    .btn.active { background: var(--orange); color: white; border-color: var(--orange); }
+    .btn.secondary {
+      background: var(--warm-dark);
+      color: var(--cream);
+      border-color: var(--warm-dark);
+      margin-left: 12px;
+    }
+    .btn.secondary:hover { background: #5C3A1E; }
+
+    /* ── Table scene ── */
+    .scene {
+      position: relative;
+      width: 900px;
+      height: 560px;
+    }
+
+    /* Oval felt table, absolutely centered in .scene */
+    .table {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 560px;
+      height: 340px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at 40% 35%, var(--felt-light) 0%, var(--felt) 55%, #123D1A 100%);
+      border: 20px solid var(--wood);
+      box-shadow:
+        0 0 0 4px var(--wood-highlight),
+        0 0 0 5px var(--wood),
+        0 14px 55px rgba(0,0,0,0.5),
+        inset 0 2px 10px rgba(255,255,255,0.07),
+        inset 0 -6px 16px rgba(0,0,0,0.3);
+    }
+
+    /* Subtle vignette on felt */
+    .table::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.2) 100%);
+      pointer-events: none;
+    }
+
+    /* ── Deck (top-right of table) ── */
+    .deck-area {
+      position: absolute;
+      right: 14%;
+      top: 18%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      z-index: 5;
+    }
+    .deck-pile {
+      width: 44px;
+      height: 60px;
+      border-radius: 5px;
+      background: linear-gradient(145deg, #1D7035, #124A22);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      box-shadow:
+        -2px -2px 0 rgba(0,0,0,0.25),
+        -4px -4px 0 rgba(0,0,0,0.18),
+        -6px -6px 0 rgba(0,0,0,0.12);
+      position: relative;
+      cursor: pointer;
+    }
+    .deck-pile::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 3px;
+    }
+    .deck-label {
+      font-size: 0.68rem;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Center zone (current player's cards) ── */
+    .center-zone {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 9px;
+      z-index: 10;
+      min-width: 180px;
+    }
+
+    .center-label {
+      font-size: 0.92rem;
+      color: #FFE082;
+      background: rgba(0,0,0,0.42);
+      border: 1px solid rgba(255,224,130,0.25);
+      border-radius: 14px;
+      padding: 2px 14px;
+      letter-spacing: 0.04em;
+    }
+
+    .center-cards {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 300px;
+    }
+
+    .action-btns {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-flip, .btn-stay {
+      font-family: 'Boogaloo', cursive;
+      font-size: 1.15rem;
+      padding: 7px 26px;
+      border-radius: 10px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      border: none;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn-flip:hover, .btn-stay:hover { transform: translateY(-2px); }
+    .btn-flip {
+      background: var(--orange);
+      color: white;
+      box-shadow: 0 3px 0 #A84000, 0 4px 12px rgba(232,93,4,0.4);
+    }
+    .btn-stay {
+      background: var(--blue);
+      color: white;
+      box-shadow: 0 3px 0 #0D3A80, 0 4px 12px rgba(26,85,176,0.35);
+    }
+
+    /* ── Player seats (positioned by JS) ── */
+    .player-seat {
+      position: absolute;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .nameplate {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: #FFF8E7;
+      border: 2.5px solid var(--wood);
+      border-radius: 20px;
+      padding: 3px 11px 3px 8px;
+      font-size: 0.88rem;
+      color: var(--warm-dark);
+      white-space: nowrap;
+      box-shadow: 2px 2px 0 var(--wood-highlight);
+    }
+    .nameplate.current {
+      background: #FFF0B0;
+      border-color: var(--orange);
+      box-shadow: 2px 2px 0 var(--orange), 0 0 16px rgba(232,93,4,0.4);
+    }
+    .nameplate.busted {
+      background: #E8E8E8;
+      border-color: #AAA;
+      box-shadow: 1px 1px 0 #AAA;
+      color: #888;
+    }
+    .nameplate.stayed {
+      background: #E8F0FF;
+      border-color: var(--blue);
+      box-shadow: 2px 2px 0 var(--blue);
+    }
+
+    .pip {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pip.active  { background: #43A047; }
+    .pip.current { background: var(--orange); }
+    .pip.busted  { background: #E53935; }
+    .pip.stayed  { background: var(--blue); }
+
+    .seat-score {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.32);
+      border-radius: 8px;
+      padding: 1px 8px;
+    }
+
+    .mini-cards {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 160px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* Mini (at seats) */
+    .card.mini {
+      width: 34px;
+      height: 47px;
+      font-size: 1.05rem;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.25);
+    }
+
+    /* Full (center zone) */
+    .card.full {
+      width: 64px;
+      height: 88px;
+      font-size: 1.95rem;
+      box-shadow: 1px 3px 8px rgba(0,0,0,0.3);
+    }
+
+    .card.num {
+      background: #FFFEF5;
+      border: 2px solid rgba(0,0,0,0.1);
+    }
+    .card.num.red   { color: var(--red); }
+    .card.num.blue  { color: var(--blue); }
+    .card.num.seven { color: var(--gold); text-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+
+    .card.num.mini::before, .card.num.full::before {
+      content: attr(data-v);
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      font-size: 0.45em;
+      opacity: 0.4;
+    }
+
+    .card.back {
+      background: #155C24;
+      border: 2px solid rgba(255,255,255,0.08);
+      box-shadow: 1px 2px 5px rgba(0,0,0,0.35);
+    }
+    .card.back::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        -45deg,
+        transparent, transparent 4px,
+        rgba(255,255,255,0.055) 4px, rgba(255,255,255,0.055) 5px
+      );
+    }
+    .card.back::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 2px;
+    }
+
+    .card.action {
+      background: linear-gradient(135deg, #FF8F00, #E65100);
+      color: white;
+      font-family: 'Boogaloo', cursive;
+      font-size: 0.6rem;
+      text-align: center;
+      line-height: 1.2;
+      padding: 3px;
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .card.action.full { font-size: 0.85rem; }
+
+    .card.mod {
+      background: linear-gradient(135deg, #7B1FA2, #4A148C);
+      color: white;
+      font-family: 'Boogaloo', cursive;
+      font-size: 0.85rem;
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .card.mod.full { font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+
+<h1>🃏 Scopee's Seven</h1>
+
+<div class="controls">
+  <span class="ctrl-label">Players:</span>
+  <button class="btn" onclick="setCount(2)">2</button>
+  <button class="btn" onclick="setCount(3)">3</button>
+  <button class="btn" onclick="setCount(4)">4</button>
+  <button class="btn active" onclick="setCount(5)">5</button>
+  <button class="btn" onclick="setCount(6)">6</button>
+  <button class="btn" onclick="setCount(7)">7</button>
+  <button class="btn secondary" onclick="nextTurn()">Next Turn →</button>
+</div>
+
+<div class="scene" id="scene">
+  <div class="table" id="table">
+    <div class="deck-area">
+      <div class="deck-pile"></div>
+      <div class="deck-label">DECK</div>
+    </div>
+    <div class="center-zone" id="centerZone"></div>
+  </div>
+</div>
+
+<script>
+  // Sample player data for the mock
+  const ALL = [
+    { name: 'You',   human: true,  cards: [3, 7, 1],       status: 'active' },
+    { name: 'Alice', human: false, cards: [4, 9],           status: 'active' },
+    { name: 'Bob',   human: false, cards: [2, 5, 8, 3],    status: 'busted' },
+    { name: 'Carol', human: false, cards: [6, 1],           status: 'stayed' },
+    { name: 'Dave',  human: false, cards: [1, 4, 2],        status: 'active' },
+    { name: 'Eve',   human: false, cards: ['Freeze', 5, 3], status: 'active' },
+    { name: 'Frank', human: false, cards: [2],              status: 'active' },
+  ];
+
+  const TABLE_W  = 560;
+  const TABLE_H  = 340;
+  const SCENE_W  = 900;
+  const SCENE_H  = 560;
+  const CX       = SCENE_W / 2;   // 450
+  const CY       = SCENE_H / 2;   // 280
+
+  // Seat orbit extends beyond the table border
+  const RX_SEAT  = TABLE_W / 2 + 80;   // 360
+  const RY_SEAT  = TABLE_H / 2 + 88;   // 258
+
+  let playerCount = 5;
+  let currentIdx  = 0;
+
+  function setCount(n) {
+    playerCount = n;
+    currentIdx  = 0;
+    document.querySelectorAll('.controls .btn:not(.secondary)').forEach(b => {
+      b.classList.toggle('active', parseInt(b.textContent) === n);
+    });
+    render();
+  }
+
+  function nextTurn() {
+    let tries = playerCount;
+    do {
+      currentIdx = (currentIdx + 1) % playerCount;
+      tries--;
+    } while (ALL[currentIdx].status === 'busted' && tries > 0);
+    render();
+  }
+
+  function cardColor(v) {
+    if (v === 7) return 'seven';
+    return v % 2 === 0 ? 'blue' : 'red';
+  }
+
+  function cardHTML(val, size, faceDown) {
+    if (faceDown) return `<div class="card ${size} back"></div>`;
+    if (typeof val === 'string') {
+      if (val.startsWith('x') || val.startsWith('+')) {
+        return `<div class="card ${size} mod">${val}</div>`;
+      }
+      return `<div class="card ${size} action">${val}</div>`;
+    }
+    return `<div class="card ${size} num ${cardColor(val)}" data-v="${val}">${val}</div>`;
+  }
+
+  function numericTotal(cards) {
+    return cards.reduce((s, v) => typeof v === 'number' ? s + v : s, 0);
+  }
+
+  function render() {
+    const scene  = document.getElementById('scene');
+    const center = document.getElementById('centerZone');
+
+    // Clear previous seats
+    scene.querySelectorAll('.player-seat').forEach(el => el.remove());
+
+    const players = ALL.slice(0, playerCount);
+    const current = players[currentIdx];
+    const isHumanTurn = current.human;
+
+    // Center zone: current player's cards
+    const pts = numericTotal(current.cards);
+    const cards = current.cards.map(v => cardHTML(v, 'full', false)).join('');
+    const btns  = isHumanTurn
+      ? `<div class="action-btns"><button class="btn-flip">Flip</button><button class="btn-stay">Stay</button></div>`
+      : '';
+    center.innerHTML = `
+      <div class="center-label">▶ ${current.name} &nbsp;·&nbsp; ${pts} pts</div>
+      <div class="center-cards">${cards}</div>
+      ${btns}
+    `;
+
+    // Player seats around the oval
+    players.forEach((p, i) => {
+      // Human at bottom (angle = π/2), others distributed counterclockwise
+      const angle  = Math.PI / 2 + (i / playerCount) * 2 * Math.PI;
+      const sx     = CX + RX_SEAT * Math.cos(angle);
+      const sy     = CY + RY_SEAT * Math.sin(angle);
+      const isCurr = i === currentIdx;
+
+      const statusKey = isCurr ? 'current' : p.status;
+      const faceDown  = p.status === 'busted' || p.status === 'stayed';
+
+      // Cards at seat: hidden if this player is current (their cards are in center)
+      const miniHTML = isCurr ? '' : p.cards.map(v => cardHTML(v, 'mini', faceDown)).join('');
+      const scoreHTML = (!isCurr && p.status === 'active')
+        ? `<div class="seat-score">+${numericTotal(p.cards)}</div>` : '';
+
+      const seat = document.createElement('div');
+      seat.className = 'player-seat';
+      seat.style.left = `${sx}px`;
+      seat.style.top  = `${sy}px`;
+      seat.style.transform = 'translate(-50%, -50%)';
+      seat.innerHTML = `
+        <div class="nameplate ${statusKey}">
+          <span class="pip ${statusKey}"></span>
+          ${p.human ? '👤' : '🤖'} ${p.name}
+        </div>
+        ${miniHTML ? `<div class="mini-cards">${miniHTML}</div>` : ''}
+        ${scoreHTML}
+      `;
+      scene.appendChild(seat);
+    });
+  }
+
+  document.fonts.ready.then(() => requestAnimationFrame(render));
+  window.addEventListener('resize', render);
+</script>
+</body>
+</html>

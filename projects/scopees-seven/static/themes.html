@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scopee's Seven — Theme Concepts</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Fredoka+One&family=Caveat:wght@700&family=Nunito:wght@900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #DDDDD8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px;
+      gap: 18px;
+      font-family: sans-serif;
+    }
+
+    body > h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #555;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .row {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    /* ── Each mock ── */
+    .mock {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      border-radius: 14px;
+      padding: 18px 18px 14px;
+    }
+
+    .mock-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      opacity: 0.65;
+    }
+
+    /* ── Scene: coordinate space for absolute positioning ── */
+    .scene {
+      position: relative;
+      width: 400px;
+      height: 290px;
+    }
+
+    /* ── Oval table ── */
+    .table {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 230px;
+      height: 144px;
+      border-radius: 50%;
+      z-index: 1;
+    }
+
+    /* ── Center zone (current player's cards) ── */
+    .center {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      z-index: 5;
+    }
+
+    .clabel {
+      font-size: 0.58rem;
+      letter-spacing: 0.04em;
+      border-radius: 8px;
+      padding: 1px 8px;
+      white-space: nowrap;
+    }
+
+    .ccards { display: flex; gap: 5px; }
+
+    .abtns { display: flex; gap: 6px; }
+
+    .abtn {
+      font-size: 0.62rem;
+      padding: 3px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 700;
+      color: white;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Player seats (positioned with CSS trig) ── */
+    .seat {
+      position: absolute;
+      left: calc(50% + 140px * cos(var(--a)));
+      top:  calc(50% + 105px * sin(var(--a)));
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      z-index: 10;
+    }
+
+    .np {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 12px;
+      padding: 2px 9px 2px 6px;
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+
+    .pip {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .mcards { display: flex; gap: 3px; }
+
+    .sc {
+      font-size: 0.58rem;
+      border-radius: 6px;
+      padding: 0 6px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      font-weight: 900;
+    }
+    .card.sm { width: 28px; height: 40px; font-size: 0.85rem; }
+    .card.lg { width: 44px; height: 62px; font-size: 1.5rem; }
+
+    .card.n { }
+    .card.n.r { color: #C42020; }
+    .card.n.b { color: #1A55B0; }
+    .card.n.g { color: #B8860B; }
+
+
+    /* ══════════════════════════════════════════
+       A — CASINO / CARD ROOM
+    ══════════════════════════════════════════ */
+    .casino { background: #0E0E0E; }
+    .casino .mock-label { color: #8B7040; }
+
+    .casino .table {
+      background: radial-gradient(ellipse at 40% 35%, #1F5E35 0%, #154A28 55%, #0D3519 100%);
+      border: 14px solid #180C06;
+      box-shadow:
+        0 0 0 3px #7A4E28,
+        0 12px 48px rgba(0,0,0,0.8),
+        inset 0 2px 8px rgba(255,255,255,0.05);
+    }
+
+    .casino .clabel {
+      background: rgba(0,0,0,0.55);
+      color: #CFA050;
+      border: 1px solid rgba(207,160,80,0.2);
+      font-family: 'Cinzel', serif;
+    }
+    .casino .abtn.flip { background: #7A5010; }
+    .casino .abtn.stay { background: #1A5228; }
+
+    .casino .np {
+      background: #181818;
+      border: 1px solid #5A3A18;
+      color: #CFA050;
+      font-family: 'Cinzel', serif;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    .casino .np.cur { border-color: #CFA050; box-shadow: 0 0 10px rgba(207,160,80,0.25); }
+    .casino .np.bust { opacity: 0.45; }
+
+    .casino .pip.cur  { background: #CFA050; }
+    .casino .pip.act  { background: #4CAF50; }
+    .casino .pip.bust { background: #D32F2F; }
+    .casino .pip.stay { background: #5C6BC0; }
+
+    .casino .card.n {
+      background: #FFFEF5;
+      border: 1px solid rgba(0,0,0,0.1);
+      box-shadow: 1px 2px 6px rgba(0,0,0,0.4);
+      font-family: 'Cinzel', serif;
+    }
+    .casino .card.dk {
+      background: #154A28;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 1px 2px 5px rgba(0,0,0,0.5);
+    }
+    .casino .card.dk::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 2px;
+    }
+    .casino .sc { color: rgba(207,160,80,0.65); }
+
+
+    /* ══════════════════════════════════════════
+       B — BRIGHT & POPPY
+    ══════════════════════════════════════════ */
+    .poppy { background: #F2F2F2; }
+    .poppy .mock-label { color: #444; }
+
+    .poppy .table {
+      background: #FFFFFF;
+      border: 14px solid #E2E2E2;
+      box-shadow:
+        0 0 0 3px #C8C8C8,
+        0 8px 30px rgba(0,0,0,0.1);
+    }
+
+    .poppy .clabel {
+      background: rgba(255,71,87,0.1);
+      color: #FF4757;
+      font-family: 'Fredoka One', cursive;
+    }
+    .poppy .abtn.flip { background: #FF4757; border-radius: 8px; }
+    .poppy .abtn.stay { background: #2ED573; border-radius: 8px; }
+
+    .poppy .np {
+      font-family: 'Fredoka One', cursive;
+      font-size: 0.78rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .poppy .seat-you   .np { background: #FF4757; color: white; border-radius: 14px; }
+    .poppy .seat-alice .np { background: #00B894; color: white; border-radius: 14px; }
+    .poppy .seat-bob   .np { background: #B2BEC3; color: white; border-radius: 14px; }
+    .poppy .seat-carol .np { background: #FDCB6E; color: #333; border-radius: 14px; }
+    .poppy .np.cur { box-shadow: 0 0 0 2px white, 0 0 0 4px #FF4757; }
+
+    .poppy .pip.cur  { background: #FF4757; }
+    .poppy .pip.act  { background: #00B894; }
+    .poppy .pip.bust { background: #B2BEC3; }
+    .poppy .pip.stay { background: #FDCB6E; }
+
+    .poppy .card.n {
+      background: white;
+      border: 1.5px solid #EBEBEB;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      border-radius: 6px;
+      font-family: 'Fredoka One', cursive;
+    }
+    .poppy .card.dk {
+      background: #D8D8D8;
+      border: 1.5px solid #C4C4C4;
+      border-radius: 6px;
+    }
+    .poppy .sc { color: #777; background: rgba(0,0,0,0.06); }
+
+
+    /* ══════════════════════════════════════════
+       C — PAPER CRAFT
+    ══════════════════════════════════════════ */
+    .paper { background: #F0E8D4; }
+    .paper .mock-label { color: #6B4A28; }
+
+    .paper .table {
+      background: #E6D8B8;
+      border: 14px solid #8B6A3A;
+      border-radius: 38%;
+      box-shadow:
+        0 0 0 2px #6D4C2A,
+        0 6px 22px rgba(0,0,0,0.22),
+        inset 0 1px 4px rgba(0,0,0,0.12);
+    }
+    /* Subtle crosshatch on paper surface */
+    .paper .table::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 9px, rgba(0,0,0,0.04) 9px, rgba(0,0,0,0.04) 10px),
+        repeating-linear-gradient(90deg, transparent, transparent 9px, rgba(0,0,0,0.04) 9px, rgba(0,0,0,0.04) 10px);
+      pointer-events: none;
+    }
+
+    .paper .clabel {
+      background: rgba(93,64,37,0.12);
+      color: #5D4025;
+      font-family: 'Caveat', cursive;
+      font-size: 0.72rem;
+    }
+    .paper .abtn.flip { background: #B53A1E; border-radius: 3px; font-family: 'Caveat', cursive; font-size: 0.72rem; }
+    .paper .abtn.stay { background: #2C6E35; border-radius: 3px; font-family: 'Caveat', cursive; font-size: 0.72rem; }
+
+    .paper .np {
+      background: #D4BC98;
+      border: 1.5px solid #8B6A3A;
+      color: #3D2007;
+      font-family: 'Caveat', cursive;
+      font-size: 0.82rem;
+      border-radius: 4px;
+      box-shadow: 1px 1px 0 #8B6A3A;
+    }
+    .paper .np.cur { background: #F0D0B8; border-color: #B53A1E; }
+    .paper .np.bust { opacity: 0.55; }
+
+    .paper .pip.cur  { background: #B53A1E; }
+    .paper .pip.act  { background: #5D7A40; }
+    .paper .pip.bust { background: #8B6A3A; }
+    .paper .pip.stay { background: #4A6070; }
+
+    .paper .card.n {
+      background: #FAF5E8;
+      border: 1.5px solid rgba(93,64,37,0.22);
+      box-shadow: 1px 2px 3px rgba(0,0,0,0.15);
+      border-radius: 3px;
+      font-family: 'Caveat', cursive;
+    }
+    .paper .card.dk {
+      background: #C8A87A;
+      border: 1.5px solid rgba(93,64,37,0.3);
+      border-radius: 3px;
+    }
+    .paper .card.dk::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 5px, rgba(0,0,0,0.06) 5px, rgba(0,0,0,0.06) 6px),
+        repeating-linear-gradient(90deg, transparent, transparent 5px, rgba(0,0,0,0.06) 5px, rgba(0,0,0,0.06) 6px);
+    }
+    .paper .sc { color: #8B6A3A; background: rgba(139,106,58,0.1); }
+  </style>
+</head>
+<body>
+
+<h1>Scopee's Seven — Table: 3 Aesthetic Directions</h1>
+
+<div class="row">
+
+  <!-- ══ A: CASINO ══ -->
+  <div class="mock casino">
+    <div class="mock-label">A — Casino / Card Room</div>
+    <div class="scene">
+      <div class="table">
+        <div class="center">
+          <div class="clabel">▶ YOU &nbsp;·&nbsp; 11 PTS</div>
+          <div class="ccards">
+            <div class="card lg n r">3</div>
+            <div class="card lg n g">7</div>
+            <div class="card lg n r">1</div>
+          </div>
+          <div class="abtns">
+            <button class="abtn flip">FLIP</button>
+            <button class="abtn stay">STAY</button>
+          </div>
+        </div>
+      </div>
+      <div class="seat seat-you"   style="--a:90deg">
+        <div class="np cur"><span class="pip cur"></span>👤 You</div>
+      </div>
+      <div class="seat seat-alice" style="--a:180deg">
+        <div class="np"><span class="pip act"></span>🤖 Alice</div>
+        <div class="mcards">
+          <div class="card sm n b">4</div>
+          <div class="card sm n r">9</div>
+        </div>
+        <div class="sc">+13</div>
+      </div>
+      <div class="seat seat-bob"   style="--a:270deg">
+        <div class="np bust"><span class="pip bust"></span>🤖 Bob</div>
+        <div class="mcards">
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+        </div>
+      </div>
+      <div class="seat seat-carol" style="--a:0deg">
+        <div class="np"><span class="pip stay"></span>🤖 Carol</div>
+        <div class="mcards">
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ B: POPPY ══ -->
+  <div class="mock poppy">
+    <div class="mock-label">B — Bright &amp; Poppy</div>
+    <div class="scene">
+      <div class="table">
+        <div class="center">
+          <div class="clabel">▶ You · 11 pts</div>
+          <div class="ccards">
+            <div class="card lg n r">3</div>
+            <div class="card lg n g">7</div>
+            <div class="card lg n r">1</div>
+          </div>
+          <div class="abtns">
+            <button class="abtn flip">Flip</button>
+            <button class="abtn stay">Stay</button>
+          </div>
+        </div>
+      </div>
+      <div class="seat seat-you"   style="--a:90deg">
+        <div class="np cur"><span class="pip cur"></span>👤 You</div>
+      </div>
+      <div class="seat seat-alice" style="--a:180deg">
+        <div class="np"><span class="pip act"></span>🤖 Alice</div>
+        <div class="mcards">
+          <div class="card sm n b">4</div>
+          <div class="card sm n r">9</div>
+        </div>
+        <div class="sc">+13</div>
+      </div>
+      <div class="seat seat-bob"   style="--a:270deg">
+        <div class="np bust"><span class="pip bust"></span>🤖 Bob</div>
+        <div class="mcards">
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+        </div>
+      </div>
+      <div class="seat seat-carol" style="--a:0deg">
+        <div class="np"><span class="pip stay"></span>🤖 Carol</div>
+        <div class="mcards">
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ C: PAPER ══ -->
+  <div class="mock paper">
+    <div class="mock-label">C — Paper Craft</div>
+    <div class="scene">
+      <div class="table">
+        <div class="center">
+          <div class="clabel">▶ You · 11 pts</div>
+          <div class="ccards">
+            <div class="card lg n r">3</div>
+            <div class="card lg n g">7</div>
+            <div class="card lg n r">1</div>
+          </div>
+          <div class="abtns">
+            <button class="abtn flip">Flip</button>
+            <button class="abtn stay">Stay</button>
+          </div>
+        </div>
+      </div>
+      <div class="seat seat-you"   style="--a:90deg">
+        <div class="np cur"><span class="pip cur"></span>👤 You</div>
+      </div>
+      <div class="seat seat-alice" style="--a:180deg">
+        <div class="np"><span class="pip act"></span>🤖 Alice</div>
+        <div class="mcards">
+          <div class="card sm n b">4</div>
+          <div class="card sm n r">9</div>
+        </div>
+        <div class="sc">+13</div>
+      </div>
+      <div class="seat seat-bob"   style="--a:270deg">
+        <div class="np bust"><span class="pip bust"></span>🤖 Bob</div>
+        <div class="mcards">
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+        </div>
+      </div>
+      <div class="seat seat-carol" style="--a:0deg">
+        <div class="np"><span class="pip stay"></span>🤖 Carol</div>
+        <div class="mcards">
+          <div class="card sm dk"></div>
+          <div class="card sm dk"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
