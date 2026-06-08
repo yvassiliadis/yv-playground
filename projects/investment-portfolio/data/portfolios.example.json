@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Brokerage",
+    "positions": [
+      {
+        "ticker": "AAPL",
+        "shares": 10.0,
+        "avg_cost": 150.00
+      },
+      {
+        "ticker": "VTI",
+        "shares": 5.5,
+        "avg_cost": 200.00
+      }
+    ]
+  },
+  {
+    "name": "Roth IRA",
+    "positions": [
+      {
+        "ticker": "VTI",
+        "shares": 20.0,
+        "avg_cost": 180.00
+      },
+      {
+        "ticker": "VXUS",
+        "shares": 15.0,
+        "avg_cost": 55.00
+      }
+    ]
+  },
+  {
+    "name": "401(k)",
+    "positions": [
+      {
+        "ticker": "VIIIX",
+        "shares": 100.0,
+        "avg_cost": null
+      }
+    ]
+  }
+]
