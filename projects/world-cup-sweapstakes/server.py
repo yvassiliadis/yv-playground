@@ -108,7 +108,6 @@ _GROUP_STAGES = {
     "GROUP_STAGE",
     "PRELIMINARY_ROUND",
     "QUALIFICATION",
-    "PLAY_OFF_FOR_THIRD_PLACE",
 }
 
 # ---------------------------------------------------------------------------
