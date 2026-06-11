@@ -19,6 +19,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -31,6 +32,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory=Path(__file__).parent), name="static")
 
 # ---------------------------------------------------------------------------
 # Constants
