@@ -23,6 +23,8 @@ from fastapi.responses import HTMLResponse
 load_dotenv(Path(__file__).parent / ".env")
 
 FOOTBALL_DATA_API_KEY = os.environ.get("FOOTBALL_DATA_API_KEY", "")
+if not FOOTBALL_DATA_API_KEY:
+    logging.warning("FOOTBALL_DATA_API_KEY is not set — /api/scores will fail")
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -122,6 +124,7 @@ class Cache:
 
 
 _cache = Cache()
+_fetch_lock = asyncio.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -314,51 +317,51 @@ async def _fetch_scores() -> tuple[dict, list]:
 @app.get("/", response_class=HTMLResponse)
 async def serve_html() -> HTMLResponse:
     html_path = Path(__file__).parent / "sweepstakes.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="sweepstakes.html not found")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
 @app.get("/api/scores")
 async def get_scores() -> dict:
-    now = datetime.now(tz=timezone.utc)
+    async with _fetch_lock:
+        now = datetime.now(tz=timezone.utc)
 
-    # Cold cache — fetch unconditionally
-    if _cache.scores is None:
-        log.info("Cache empty — fetching scores")
-        try:
-            scores, matches = await _fetch_scores()
-        except Exception as exc:
-            log.error("Fetch failed: %s", exc)
-            raise HTTPException(
-                status_code=503, detail="Failed to fetch scores"
-            ) from exc
-        _cache.scores = scores
-        _cache.matches = matches
-        _cache.fetched_at = now
-        return scores
-
-    # Warm cache — check result window
-    assert _cache.matches is not None
-    assert _cache.fetched_at is not None
-
-    if _needs_refresh(_cache.matches):
-        stale = (now - _cache.fetched_at).total_seconds() > 300  # 5 minutes
-        if stale:
-            log.info("Result window active and cache stale — refreshing")
+        # Cold cache — fetch unconditionally
+        if _cache.scores is None:
+            log.info("Cache empty — fetching scores")
             try:
                 scores, matches = await _fetch_scores()
-                _cache.scores = scores
-                _cache.matches = matches
-                _cache.fetched_at = now
             except Exception as exc:
-                log.warning("Refresh failed, returning stale cache: %s", exc)
-        else:
-            log.debug(
-                "Result window active but cache fresh (< 5 min) — skipping refresh"
-            )
-    else:
-        log.debug("No result window active — returning cached data")
+                log.error("Fetch failed: %s", exc)
+                raise HTTPException(
+                    status_code=503, detail="Failed to fetch scores"
+                ) from exc
+            _cache.scores = scores
+            _cache.matches = matches
+            _cache.fetched_at = now
+            return scores
 
-    return _cache.scores
+        # Warm cache — check result window
+        if _needs_refresh(_cache.matches):  # type: ignore[arg-type]
+            stale = (now - _cache.fetched_at).total_seconds() > 300  # type: ignore[operator]
+            if stale:
+                log.info("Result window active and cache stale — refreshing")
+                try:
+                    scores, matches = await _fetch_scores()
+                    _cache.scores = scores
+                    _cache.matches = matches
+                    _cache.fetched_at = now
+                except Exception as exc:
+                    log.warning("Refresh failed, returning stale cache: %s", exc)
+            else:
+                log.debug(
+                    "Result window active but cache fresh (< 5 min) — skipping refresh"
+                )
+        else:
+            log.debug("No result window active — returning cached data")
+
+        return _cache.scores  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------
