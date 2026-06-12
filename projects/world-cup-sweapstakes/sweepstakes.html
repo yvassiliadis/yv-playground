@@ -735,6 +735,33 @@
   .leg-item { display: flex; align-items: center; gap: 7px; }
   .leg-adv { display: inline-block; width: 3px; height: 14px; background: var(--gold); border-radius: 1px; opacity: .6; }
   .leg-maybe { display: inline-block; width: 3px; height: 14px; border-radius: 1px; border-left: 2px dashed rgba(255,214,10,.4); }
+
+  /* ---------- Results sections ---------- */
+  .results-sections { display: flex; flex-direction: column; gap: 48px; }
+  .results-sub-head {
+    font-family: var(--mono);
+    font-size: .62rem;
+    letter-spacing: .3em;
+    text-transform: uppercase;
+    color: var(--text);
+    margin: 0 0 16px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .results-sections.bracket-first #bracketSection { order: -1; }
+
+  /* ---------- Bracket ---------- */
+  .b-round { margin-bottom: 20px; }
+  .b-round-lbl {
+    font-family: var(--mono);
+    font-size: .58rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    padding: 6px 0 5px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 2px;
+  }
 </style>
 </head>
 <body>
@@ -763,13 +790,22 @@
 
   <!-- ========== TAB: RESULTS ========== -->
   <section class="panel" id="panel-results">
-    <div class="section-label">// Group stage · Jun 11 – Jul 2</div>
+    <div class="section-label">// World Cup 2026 · Jun 11 – Jul 19</div>
     <h2 class="head">Results</h2>
-    <div class="groups-legend">
-      <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
-      <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+    <div class="results-sections" id="resultsSections">
+      <div class="results-section" id="groupsSection">
+        <h3 class="results-sub-head">Group Stage</h3>
+        <div class="groups-legend">
+          <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
+          <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+        </div>
+        <div class="groups-grid" id="groupsGrid"></div>
+      </div>
+      <div class="results-section" id="bracketSection">
+        <h3 class="results-sub-head">Knockout Stage</h3>
+        <div id="bracketView"></div>
+      </div>
     </div>
-    <div class="groups-grid" id="groupsGrid"></div>
   </section>
 
   <!-- ========== TAB 1: RULES ========== -->
@@ -1027,7 +1063,7 @@ tabBtns.forEach(btn => {
         p.classList.add('active');
       }
     });
-    if (tab === 'results') initGroups();
+    if (tab === 'results') { initGroups(); initBracket(); setResultsOrder(); }
   });
 });
 
@@ -1171,6 +1207,74 @@ async function initGroups() {
   } catch {
     grid.innerHTML = '<p style="color:var(--muted);padding:20px;font-family:var(--mono);font-size:.8rem;">Could not load group data.</p>';
   }
+}
+
+/* ============ TAB: BRACKET ============ */
+let bracketLoaded = false;
+
+function buildBracketRound(round) {
+  const wrap = document.createElement('div');
+  wrap.className = 'b-round';
+
+  const lbl = document.createElement('div');
+  lbl.className = 'b-round-lbl';
+  lbl.textContent = round.label;
+  wrap.appendChild(lbl);
+
+  round.matches.forEach(m => {
+    const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+    const isFinished = m.status === 'FINISHED';
+    const row = document.createElement('div');
+    row.className = 'g-match' + (isLive ? ' live' : '');
+
+    const homeFlag = m.home === 'TBD' ? '🏳️' : flag(m.home);
+    const awayFlag = m.away === 'TBD' ? '🏳️' : flag(m.away);
+    const homeDisplay = m.home === 'TBD' ? `<em style="color:var(--muted)">TBD</em>` : esc(m.home);
+    const awayDisplay = m.away === 'TBD' ? `<em style="color:var(--muted)">TBD</em>` : esc(m.away);
+
+    const scoreHtml = (isFinished || isLive)
+      ? `<div class="g-match-score">${m.homeScore}&nbsp;·&nbsp;${m.awayScore}</div>`
+      : `<div class="g-match-score upcoming">vs</div>`;
+
+    const { date, time } = fmtDt(m.utcDate);
+    row.innerHTML = `
+      <div class="g-match-date"><div>${esc(date)}</div><div class="g-match-time">${esc(time)}</div></div>
+      <div class="g-match-team"><span>${homeFlag}</span><span>${homeDisplay}</span></div>
+      ${scoreHtml}
+      <div class="g-match-team away"><span>${awayFlag}</span><span>${awayDisplay}</span></div>
+    `;
+    wrap.appendChild(row);
+  });
+
+  return wrap;
+}
+
+async function initBracket() {
+  if (bracketLoaded) return;
+  const view = document.getElementById('bracketView');
+  view.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Loading…</p>';
+  try {
+    const res = await fetch('/api/bracket');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    bracketLoaded = true;
+    view.innerHTML = '';
+    if (!data.rounds || data.rounds.length === 0) {
+      view.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">No knockout data yet.</p>';
+      return;
+    }
+    data.rounds.forEach(round => view.appendChild(buildBracketRound(round)));
+  } catch {
+    view.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Could not load bracket.</p>';
+  }
+}
+
+function setResultsOrder() {
+  const GROUP_STAGE_END = new Date('2026-07-03T00:00:00Z');
+  document.getElementById('resultsSections').classList.toggle(
+    'bracket-first',
+    Date.now() >= GROUP_STAGE_END.getTime()
+  );
 }
 
 async function initRankings() {
@@ -1365,6 +1469,7 @@ tiersWrap.innerHTML = [1,2,3,4].map(t => {
       <div class="chips">${chips}</div>
     </div>`;
 }).join('');
+setResultsOrder();
 </script>
 </body>
 </html>
