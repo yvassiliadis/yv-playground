@@ -1450,6 +1450,19 @@ document.querySelectorAll('table.assign thead th[data-sort]').forEach(th => {
   });
 });
 tableFilter.addEventListener('input', renderTable);
+
+function activateDefaultTab() {
+  const GROUP_STAGE_END = new Date('2026-07-03T00:00:00Z');
+  const preferred = Date.now() >= GROUP_STAGE_END.getTime() ? 'results' : 'all';
+  const tab = document.querySelector(`.tab-btn[data-tab="${preferred}"]`) ? preferred : 'all';
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  const panel = panels[tab];
+  if (btn)   btn.classList.add('active');
+  if (panel) panel.classList.add('active');
+  if (tab === 'results') { initGroups(); initBracket(); setResultsOrder(); }
+}
+activateDefaultTab();
+
 initRankings();
 
 /* ============ TAB 4: TIERS ============ */
@@ -1469,7 +1482,6 @@ tiersWrap.innerHTML = [1,2,3,4].map(t => {
       <div class="chips">${chips}</div>
     </div>`;
 }).join('');
-setResultsOrder();
 </script>
 </body>
 </html>
