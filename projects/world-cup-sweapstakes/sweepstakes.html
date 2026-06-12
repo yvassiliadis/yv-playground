@@ -1328,7 +1328,6 @@ async function initBracket() {
     const res = await fetch('/api/bracket');
     if (!res.ok) throw new Error();
     const data = await res.json();
-    bracketLoaded = true;
     grid.innerHTML = '';
 
     data.rounds.forEach(round => {
@@ -1374,6 +1373,7 @@ async function initBracket() {
       grid.appendChild(col);
     });
 
+    bracketLoaded = true;
     requestAnimationFrame(drawBracketLines);
     document.fonts.ready.then(drawBracketLines);
   } catch {
