@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.env
+__pycache__
+*.pyc
+*.csv
+*.txt
+*.pdf
+*.md
+draw.py
+fetch_odds.py
+tiers.json
+wc2026_odds.json
+tier_distribution.png
