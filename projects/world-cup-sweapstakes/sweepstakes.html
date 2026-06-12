@@ -1068,6 +1068,111 @@ function teamTotal(s) {
 
 let ROWS_BASE = [];
 
+/* ============ TAB: GROUPS ============ */
+let groupsLoaded = false;
+
+function fmtDt(isoStr) {
+  const d = new Date(isoStr);
+  const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return { date, time };
+}
+
+function buildGroupCard(letter, group) {
+  const anyPlayed = group.standings.some(s => s.played > 0);
+  const hasLive = group.matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+
+  const card = document.createElement('div');
+  card.className = 'g-card';
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'g-card-hdr';
+  let hdrInner = `<span>Group ${esc(letter)}</span>`;
+  if (hasLive) {
+    hdrInner += `<span class="g-live-badge"><span class="g-live-dot"></span>Live</span>`;
+  }
+  hdrInner += `<span class="g-chevron">▾</span>`;
+  hdr.innerHTML = hdrInner;
+  card.appendChild(hdr);
+
+  // Standings
+  const table = document.createElement('table');
+  table.className = 'g-standings';
+  table.innerHTML = `<thead><tr>
+    <th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th class="g-pts-col">Pts</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  group.standings.forEach((s, i) => {
+    const gd = s.played > 0 ? (s.gd > 0 ? `+${s.gd}` : `${s.gd}`) : '–';
+    const tr = document.createElement('tr');
+    if (i < 2 && anyPlayed) tr.className = 'adv';
+    else if (i === 2 && anyPlayed) tr.className = 'maybe';
+    tr.innerHTML = `
+      <td><div class="g-team-cell">
+        <span>${flag(s.name)}</span>
+        <span>${esc(s.name)}</span>
+      </div></td>
+      <td>${s.played}</td>
+      <td>${s.won}</td>
+      <td>${s.drawn}</td>
+      <td>${s.lost}</td>
+      <td>${gd}</td>
+      <td class="g-pts-col">${s.pts}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  card.appendChild(table);
+
+  // Matches (collapsed by default)
+  const outer = document.createElement('div');
+  outer.className = 'g-matches-outer';
+  const matchWrap = document.createElement('div');
+  matchWrap.className = 'g-matches';
+  group.matches.forEach(m => {
+    const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+    const isFinished = m.status === 'FINISHED';
+    const row = document.createElement('div');
+    row.className = 'g-match' + (isLive ? ' live' : '');
+    const scoreHtml = (isFinished || isLive)
+      ? `<div class="g-match-score">${m.homeScore}&nbsp;·&nbsp;${m.awayScore}</div>`
+      : `<div class="g-match-score upcoming">vs</div>`;
+    const { date, time } = fmtDt(m.utcDate);
+    row.innerHTML = `
+      <div class="g-match-date"><div>${esc(date)}</div><div class="g-match-time">${esc(time)}</div></div>
+      <div class="g-match-team"><span>${flag(m.home)}</span><span>${esc(m.home)}</span></div>
+      ${scoreHtml}
+      <div class="g-match-team away"><span>${flag(m.away)}</span><span>${esc(m.away)}</span></div>
+    `;
+    matchWrap.appendChild(row);
+  });
+  outer.appendChild(matchWrap);
+  card.appendChild(outer);
+
+  card.addEventListener('click', () => card.classList.toggle('open'));
+
+  return card;
+}
+
+async function initGroups() {
+  if (groupsLoaded) return;
+  const grid = document.getElementById('groupsGrid');
+  grid.innerHTML = '<p style="color:var(--muted);padding:20px;font-family:var(--mono);font-size:.8rem;">Loading…</p>';
+  try {
+    const res = await fetch('/api/groups');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    groupsLoaded = true;
+    grid.innerHTML = '';
+    for (const [letter, group] of Object.entries(data)) {
+      grid.appendChild(buildGroupCard(letter, group));
+    }
+  } catch {
+    grid.innerHTML = '<p style="color:var(--muted);padding:20px;font-family:var(--mono);font-size:.8rem;">Could not load group data.</p>';
+  }
+}
+
 async function initRankings() {
   scoresNote.textContent = 'Fetching live scores…';
   assignBody.innerHTML = '<tr><td colspan="7" class="no-results">Loading…</td></tr>';
