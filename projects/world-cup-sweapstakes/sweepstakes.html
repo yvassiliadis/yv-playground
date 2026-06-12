@@ -753,8 +753,12 @@
   .round-col-meta{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
   .round-has-live .round-col-name::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.8s infinite;margin-right:7px;vertical-align:middle;}
   .round-col-matches{display:flex;flex-direction:column;}
-  .b-slot{display:flex;align-items:stretch;}
-  .b-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:6px;overflow:hidden;width:100%;}
+  .b-slot{display:flex;align-items:center;}
+  [data-round="r32"] .b-slot{height:110px;}
+  [data-round="r16"] .b-slot{height:220px;}
+  [data-round="qf"]  .b-slot{height:440px;}
+  [data-round="sf"]  .b-slot{height:880px;}
+  .b-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:6px;overflow:hidden;width:100%;line-height:1.2;}
   .b-card.is-final{border-top:2px solid var(--gold);}
   .b-card-hdr{padding:5px 10px;font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:5px;}
   .b-card-hdr.is-live{color:var(--red);}
@@ -788,8 +792,8 @@
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="tab-btn" data-tab="results">Results</button>
     <button class="tab-btn" data-tab="all">Rankings</button>
+    <button class="tab-btn" data-tab="results">Score Center</button>
     <button class="tab-btn" data-tab="rules">Rules</button>
     <button class="tab-btn" data-tab="tiers">Tiers</button>
   </nav>
@@ -1222,7 +1226,8 @@ async function initGroups() {
 /* ============ TAB: BRACKET ============ */
 let bracketLoaded = false;
 
-const THIRD_GAP = 20;
+const FINAL_SPACER = 838;
+const THIRD_GAP    = 52;
 
 function buildMatchCard(m) {
   const isLive     = m.status === 'IN_PLAY' || m.status === 'PAUSED';
@@ -1347,6 +1352,9 @@ async function initBracket() {
       matchList.className = 'round-col-matches';
 
       if (round.id === 'final') {
+        const spacer = document.createElement('div');
+        spacer.style.height = FINAL_SPACER + 'px';
+        matchList.appendChild(spacer);
         matchList.appendChild(buildMatchCard(round.matches[0]));
         if (round.matches[1]) {
           const gap = document.createElement('div');
