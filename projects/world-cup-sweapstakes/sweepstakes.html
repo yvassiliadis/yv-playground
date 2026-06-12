@@ -1011,6 +1011,7 @@ const TIER_TAG = { 1: "T1 · FAVORITES", 2: "T2 · STRONG", 3: "T3 · MID-TIER",
 /* ============ TABS ============ */
 const tabBtns = document.querySelectorAll('.tab-btn');
 const panels = {
+  results: document.getElementById('panel-results'),
   all: document.getElementById('panel-all'),
   rules: document.getElementById('panel-rules'),
   tiers: document.getElementById('panel-tiers')
@@ -1026,6 +1027,7 @@ tabBtns.forEach(btn => {
         p.classList.add('active');
       }
     });
+    if (tab === 'results') initGroups();
   });
 });
 
