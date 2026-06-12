@@ -169,6 +169,192 @@ def _is_group_stage(stage: str) -> bool:
     return stage.startswith("GROUP_STAGE") or stage in _GROUP_STAGES
 
 
+_BRACKET_ROUNDS = [
+    {"id": "r32",   "label": "Round of 32",    "stages": ["LAST_32"]},
+    {"id": "r16",   "label": "Round of 16",    "stages": ["LAST_16"]},
+    {"id": "qf",    "label": "Quarter-finals", "stages": ["QUARTER_FINALS"]},
+    {"id": "sf",    "label": "Semi-finals",    "stages": ["SEMI_FINALS"]},
+    {"id": "final", "label": "Final",          "stages": ["FINAL", "THIRD_PLACE"]},
+]
+
+_MATCH_LABEL = {
+    "FINAL":       "Final",
+    "THIRD_PLACE": "3rd Place",
+}
+
+
+def _fmt_date_range(utc_dates: list[str]) -> str:
+    """Return a human-readable date range like 'Jun 28 – Jul 1' or 'Jul 19'."""
+    parsed = []
+    for d in utc_dates:
+        if not d:
+            continue
+        try:
+            parsed.append(datetime.fromisoformat(d.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    if not parsed:
+        return ""
+    lo, hi = min(parsed), max(parsed)
+    if lo.month == hi.month and lo.day == hi.day:
+        return f"{lo.strftime('%b')} {lo.day}"
+    elif lo.month == hi.month:
+        return f"{lo.strftime('%b')} {lo.day} – {hi.day}"
+    else:
+        return f"{lo.strftime('%b')} {lo.day} – {hi.strftime('%b')} {hi.day}"
+
+
+def _build_bracket(matches: list) -> dict:
+    # Collect matches per stage
+    by_stage: dict[str, list] = {}
+    for match in matches:
+        stage = match.get("stage", "")
+        if not any(stage in r["stages"] for r in _BRACKET_ROUNDS):
+            continue
+        by_stage.setdefault(stage, []).append(match)
+
+    result = []
+    for round_def in _BRACKET_ROUNDS:
+        round_matches: list[dict] = []
+        utc_dates: list[str] = []
+
+        for stage in round_def["stages"]:
+            stage_matches = by_stage.get(stage, [])
+            stage_matches = sorted(stage_matches, key=lambda m: m.get("utcDate") or "")
+            match_label = _MATCH_LABEL.get(stage)
+
+            for match in stage_matches:
+                home_raw = match.get("homeTeam", {}).get("name", "")
+                away_raw = match.get("awayTeam", {}).get("name", "")
+                home = _normalize_name(home_raw)
+                away = _normalize_name(away_raw)
+
+                score_data = match.get("score", {})
+                full_time = score_data.get("fullTime", {})
+
+                utc_date = match.get("utcDate")
+                if utc_date:
+                    utc_dates.append(utc_date)
+
+                round_matches.append({
+                    "home":      home if home in _KNOWN_TEAMS else None,
+                    "away":      away if away in _KNOWN_TEAMS else None,
+                    "homeScore": full_time.get("home"),
+                    "awayScore": full_time.get("away"),
+                    "status":    match.get("status", ""),
+                    "utcDate":   utc_date,
+                    "label":     match_label,
+                })
+
+        if round_matches:
+            result.append({
+                "id":      round_def["id"],
+                "label":   round_def["label"],
+                "dates":   _fmt_date_range(utc_dates),
+                "matches": round_matches,
+            })
+
+    return {"rounds": result}
+
+
+def _build_groups(matches: list) -> dict:
+    standings: dict[str, dict[str, dict]] = {}  # group_letter -> {team_name -> stats}
+    group_matches: dict[str, list] = {}  # group_letter -> [match_entry]
+
+    for match in matches:
+        stage = match.get("stage", "")
+        if not _is_group_stage(stage):
+            continue
+
+        home_raw = match.get("homeTeam", {}).get("name", "")
+        away_raw = match.get("awayTeam", {}).get("name", "")
+        home = _normalize_name(home_raw)
+        away = _normalize_name(away_raw)
+
+        if home not in _KNOWN_TEAMS or away not in _KNOWN_TEAMS:
+            continue
+
+        group_field = match.get("group") or ""
+        # Expect "GROUP_A", "GROUP_B", etc.
+        if not group_field.startswith("GROUP_"):
+            continue
+        letter = group_field[len("GROUP_"):]
+        if not letter or len(letter) != 1 or not letter.isalpha():
+            continue
+
+        # Ensure structures exist
+        if letter not in standings:
+            standings[letter] = {}
+            group_matches[letter] = []
+
+        for team in (home, away):
+            if team not in standings[letter]:
+                standings[letter][team] = {
+                    "name": team,
+                    "played": 0,
+                    "won": 0,
+                    "drawn": 0,
+                    "lost": 0,
+                    "gf": 0,
+                    "ga": 0,
+                }
+
+        status = match.get("status", "")
+        score_data = match.get("score", {})
+        full_time = score_data.get("fullTime", {})
+        hg = full_time.get("home")
+        ag = full_time.get("away")
+
+        if status == "FINISHED" and hg is not None and ag is not None:
+            standings[letter][home]["played"] += 1
+            standings[letter][away]["played"] += 1
+            standings[letter][home]["gf"] += hg
+            standings[letter][home]["ga"] += ag
+            standings[letter][away]["gf"] += ag
+            standings[letter][away]["ga"] += hg
+            if hg > ag:
+                standings[letter][home]["won"] += 1
+                standings[letter][away]["lost"] += 1
+            elif hg < ag:
+                standings[letter][away]["won"] += 1
+                standings[letter][home]["lost"] += 1
+            else:
+                standings[letter][home]["drawn"] += 1
+                standings[letter][away]["drawn"] += 1
+
+        group_matches[letter].append({
+            "home": home,
+            "away": away,
+            "homeScore": hg,
+            "awayScore": ag,
+            "status": status,
+            "utcDate": match.get("utcDate"),
+            "matchday": match.get("matchday"),
+        })
+
+    result = {}
+    for letter in sorted(standings.keys()):
+        team_rows = []
+        for entry in standings[letter].values():
+            pts = entry["won"] * 3 + entry["drawn"]
+            gd = entry["gf"] - entry["ga"]
+            team_rows.append({**entry, "pts": pts, "gd": gd})
+
+        team_rows.sort(key=lambda t: (-t["pts"], -t["gd"], -t["gf"], t["name"]))
+
+        sorted_matches = sorted(
+            group_matches[letter],
+            key=lambda m: (m.get("matchday") or 0, m.get("utcDate") or ""),
+        )
+
+        result[letter] = {
+            "standings": team_rows,
+            "matches": sorted_matches,
+        }
+
+    return result
+
+
 def _build_scores(matches: list, scorers: list) -> dict:
     scores: dict = {}
 
@@ -364,6 +550,44 @@ async def get_scores() -> dict:
             log.debug("No result window active — returning cached data")
 
         return _cache.scores  # type: ignore[return-value]
+
+
+@app.get("/api/groups")
+async def get_groups() -> dict:
+    async with _fetch_lock:
+        if _cache.matches is None:
+            log.info("Cache empty — fetching scores for groups")
+            try:
+                scores, matches = await _fetch_scores()
+            except Exception as exc:
+                log.error("Fetch failed: %s", exc)
+                raise HTTPException(
+                    status_code=503, detail="Failed to fetch scores"
+                ) from exc
+            _cache.scores = scores
+            _cache.matches = matches
+            _cache.fetched_at = datetime.now(tz=timezone.utc)
+
+    return _build_groups(_cache.matches)  # type: ignore[arg-type]
+
+
+@app.get("/api/bracket")
+async def get_bracket() -> dict:
+    async with _fetch_lock:
+        if _cache.matches is None:
+            log.info("Cache empty — fetching scores for bracket")
+            try:
+                scores, matches = await _fetch_scores()
+            except Exception as exc:
+                log.error("Fetch failed: %s", exc)
+                raise HTTPException(
+                    status_code=503, detail="Failed to fetch scores"
+                ) from exc
+            _cache.scores = scores
+            _cache.matches = matches
+            _cache.fetched_at = datetime.now(tz=timezone.utc)
+
+    return _build_bracket(_cache.matches)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
