@@ -738,30 +738,40 @@
 
   /* ---------- Results sections ---------- */
   .results-sections { display: flex; flex-direction: column; gap: 48px; }
-  .results-sub-head {
-    font-family: var(--mono);
-    font-size: .62rem;
-    letter-spacing: .3em;
-    text-transform: uppercase;
-    color: var(--text);
-    margin: 0 0 16px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border-soft);
-  }
   .results-sections.bracket-first #bracketSection { order: -1; }
 
   /* ---------- Bracket ---------- */
-  .b-round { margin-bottom: 20px; }
-  .b-round-lbl {
-    font-family: var(--mono);
-    font-size: .58rem;
-    letter-spacing: .2em;
-    text-transform: uppercase;
-    color: var(--gold);
-    padding: 6px 0 5px;
-    border-bottom: 1px solid var(--border-soft);
-    margin-bottom: 2px;
-  }
+  .section-sep{border:none;border-top:1px solid var(--border-soft);margin:56px 0 44px;}
+  .bracket-first #bracketSection .section-sep{margin-top:0;}
+  .bracket-outer{position:relative;overflow-x:auto;}
+  .bracket-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+  .bracket-grid{display:flex;gap:24px;align-items:flex-start;min-width:950px;}
+  .round-col{flex-shrink:0;width:185px;}
+  .round-col-hdr{padding-bottom:11px;border-bottom:1px solid var(--border-soft);margin-bottom:0;}
+  .round-col-name{font-family:var(--display);font-size:1.15rem;letter-spacing:.04em;text-transform:uppercase;line-height:1;}
+  .round-col-name.is-final{color:var(--gold);}
+  .round-col-meta{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+  .round-has-live .round-col-name::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.8s infinite;margin-right:7px;vertical-align:middle;}
+  .round-col-matches{display:flex;flex-direction:column;}
+  .b-slot{display:flex;align-items:center;}
+  [data-round="r32"] .b-slot{height:88px;}
+  [data-round="r16"] .b-slot{height:176px;}
+  [data-round="qf"]  .b-slot{height:352px;}
+  [data-round="sf"]  .b-slot{height:704px;}
+  .b-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:6px;overflow:hidden;width:100%;}
+  .b-card.is-final{border-top:2px solid var(--gold);}
+  .b-card-hdr{padding:5px 10px;font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:5px;}
+  .b-card-hdr.is-live{color:var(--red);}
+  .b-card-hdr.is-final-label{color:var(--gold);}
+  .b-live-dot{width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.8s infinite;flex-shrink:0;}
+  .b-team{display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:.82rem;}
+  .b-team+.b-team{border-top:1px solid rgba(255,255,255,.04);}
+  .b-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .b-name.tbd{color:var(--muted);}
+  .b-goals{font-family:var(--mono);font-size:.9rem;font-weight:500;min-width:16px;text-align:right;flex-shrink:0;}
+  .b-goals.dash{color:var(--muted);font-weight:400;}
+  .b-goals.live{color:var(--red);}
+  .b-team.out{opacity:.4;}
 </style>
 </head>
 <body>
@@ -794,7 +804,6 @@
     <h2 class="head">Results</h2>
     <div class="results-sections" id="resultsSections">
       <div class="results-section" id="groupsSection">
-        <h3 class="results-sub-head">Group Stage</h3>
         <div class="groups-legend">
           <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
           <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
@@ -802,8 +811,13 @@
         <div class="groups-grid" id="groupsGrid"></div>
       </div>
       <div class="results-section" id="bracketSection">
-        <h3 class="results-sub-head">Knockout Stage</h3>
-        <div id="bracketView"></div>
+        <hr class="section-sep">
+        <div class="section-label">// Knockout stage · Jun 28 – Jul 19</div>
+        <h2 class="head">Bracket</h2>
+        <div class="bracket-outer" id="bracketOuter">
+          <svg class="bracket-svg" id="bracketSvg" aria-hidden="true"></svg>
+          <div class="bracket-grid" id="bracketGrid"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -1212,60 +1226,158 @@ async function initGroups() {
 /* ============ TAB: BRACKET ============ */
 let bracketLoaded = false;
 
-function buildBracketRound(round) {
-  const wrap = document.createElement('div');
-  wrap.className = 'b-round';
+const FINAL_SPACER = 660;
+const THIRD_GAP    = 52;
 
-  const lbl = document.createElement('div');
-  lbl.className = 'b-round-lbl';
-  lbl.textContent = round.label;
-  wrap.appendChild(lbl);
+function buildMatchCard(m) {
+  const isLive     = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+  const isFinished = m.status === 'FINISHED';
+  const isFinal    = m.label === 'Final';
 
-  round.matches.forEach(m => {
-    const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
-    const isFinished = m.status === 'FINISHED';
+  const card = document.createElement('div');
+  card.className = 'b-card' + (isFinal ? ' is-final' : '');
+
+  const hdr = document.createElement('div');
+  if (isLive) {
+    hdr.className = 'b-card-hdr is-live';
+    hdr.innerHTML = `<span class="b-live-dot"></span>Live`;
+  } else {
+    hdr.className = 'b-card-hdr' + (isFinal ? ' is-final-label' : '');
+    const {date, time} = fmtDt(m.utcDate);
+    hdr.textContent = (m.label ? m.label + ' · ' : '') + date + ' · ' + time;
+  }
+  card.appendChild(hdr);
+
+  const homeGoals = m.homeScore, awayGoals = m.awayScore;
+  const homeIsOut = isFinished && homeGoals !== null && awayGoals !== null && homeGoals < awayGoals;
+  const awayIsOut = isFinished && homeGoals !== null && awayGoals !== null && awayGoals < homeGoals;
+
+  [
+    {name: m.home, goals: homeGoals, isOut: homeIsOut},
+    {name: m.away, goals: awayGoals, isOut: awayIsOut},
+  ].forEach(({name, goals, isOut}) => {
     const row = document.createElement('div');
-    row.className = 'g-match' + (isLive ? ' live' : '');
-
-    const homeFlag = m.home === 'TBD' ? '🏳️' : flag(m.home);
-    const awayFlag = m.away === 'TBD' ? '🏳️' : flag(m.away);
-    const homeDisplay = m.home === 'TBD' ? `<em style="color:var(--muted)">TBD</em>` : esc(m.home);
-    const awayDisplay = m.away === 'TBD' ? `<em style="color:var(--muted)">TBD</em>` : esc(m.away);
-
-    const scoreHtml = (isFinished || isLive)
-      ? `<div class="g-match-score">${m.homeScore}&nbsp;·&nbsp;${m.awayScore}</div>`
-      : `<div class="g-match-score upcoming">vs</div>`;
-
-    const { date, time } = fmtDt(m.utcDate);
-    row.innerHTML = `
-      <div class="g-match-date"><div>${esc(date)}</div><div class="g-match-time">${esc(time)}</div></div>
-      <div class="g-match-team"><span>${homeFlag}</span><span>${homeDisplay}</span></div>
-      ${scoreHtml}
-      <div class="g-match-team away"><span>${awayFlag}</span><span>${awayDisplay}</span></div>
-    `;
-    wrap.appendChild(row);
+    row.className = 'b-team' + (isOut ? ' out' : '');
+    const flagHtml = name ? flag(name) : '🏳️';
+    const nameHtml = `<span class="b-name${name ? '' : ' tbd'}">${esc(name || 'TBD')}</span>`;
+    const goalsHtml = goals !== null
+      ? `<span class="b-goals${isLive ? ' live' : ''}">${goals}</span>`
+      : `<span class="b-goals dash">—</span>`;
+    row.innerHTML = `<span>${flagHtml}</span>${nameHtml}${goalsHtml}`;
+    card.appendChild(row);
   });
 
-  return wrap;
+  return card;
+}
+
+function drawBracketLines() {
+  const outer = document.getElementById('bracketOuter');
+  const svg   = document.getElementById('bracketSvg');
+  if (!outer || !svg) return;
+  const oRect = outer.getBoundingClientRect();
+
+  svg.setAttribute('width',  outer.scrollWidth);
+  svg.setAttribute('height', outer.scrollHeight);
+  svg.innerHTML = '';
+
+  const cardCenter = el => {
+    const r = el.getBoundingClientRect();
+    return {
+      rx: r.right  - oRect.left,
+      lx: r.left   - oRect.left,
+      cy: (r.top + r.bottom) / 2 - oRect.top,
+    };
+  };
+
+  const ROUND_PAIRS = [['r32','r16'],['r16','qf'],['qf','sf'],['sf','final']];
+
+  ROUND_PAIRS.forEach(([fromId, toId]) => {
+    const from = Array.from(document.querySelectorAll(`[data-round="${fromId}"] .b-card`));
+    const to   = Array.from(document.querySelectorAll(`[data-round="${toId}"] .b-card`));
+    const limit = fromId === 'sf' ? 1 : to.length;
+
+    for (let i = 0; i < limit; i++) {
+      const c1 = from[i * 2], c2 = from[i * 2 + 1], ct = to[i];
+      if (!c1 || !c2 || !ct) continue;
+
+      const p1 = cardCenter(c1);
+      const p2 = cardCenter(c2);
+      const pt = cardCenter(ct);
+      const xm = (p1.rx + pt.lx) / 2;
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d',
+        `M ${p1.rx} ${p1.cy} H ${xm} ` +
+        `M ${p2.rx} ${p2.cy} H ${xm} ` +
+        `M ${xm} ${p1.cy} V ${p2.cy} ` +
+        `M ${xm} ${pt.cy} H ${pt.lx}`
+      );
+      path.setAttribute('stroke', 'rgba(255,255,255,0.15)');
+      path.setAttribute('stroke-width', '1');
+      path.setAttribute('fill', 'none');
+      svg.appendChild(path);
+    }
+  });
 }
 
 async function initBracket() {
   if (bracketLoaded) return;
-  const view = document.getElementById('bracketView');
-  view.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Loading…</p>';
+  const grid = document.getElementById('bracketGrid');
+  grid.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Loading…</p>';
   try {
     const res = await fetch('/api/bracket');
     if (!res.ok) throw new Error();
     const data = await res.json();
     bracketLoaded = true;
-    view.innerHTML = '';
-    if (!data.rounds || data.rounds.length === 0) {
-      view.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">No knockout data yet.</p>';
-      return;
-    }
-    data.rounds.forEach(round => view.appendChild(buildBracketRound(round)));
+    grid.innerHTML = '';
+
+    data.rounds.forEach(round => {
+      const col = document.createElement('div');
+      col.className = 'round-col';
+      col.dataset.round = round.id;
+
+      const hasLive = round.matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+      const hdr = document.createElement('div');
+      hdr.className = 'round-col-hdr' + (hasLive ? ' round-has-live' : '');
+      const nameEl = document.createElement('div');
+      nameEl.className = 'round-col-name' + (round.id === 'final' ? ' is-final' : '');
+      nameEl.textContent = round.label;
+      const metaEl = document.createElement('div');
+      metaEl.className = 'round-col-meta';
+      metaEl.textContent = round.dates;
+      hdr.appendChild(nameEl);
+      hdr.appendChild(metaEl);
+      col.appendChild(hdr);
+
+      const matchList = document.createElement('div');
+      matchList.className = 'round-col-matches';
+
+      if (round.id === 'final') {
+        const spacer = document.createElement('div');
+        spacer.style.height = FINAL_SPACER + 'px';
+        matchList.appendChild(spacer);
+        matchList.appendChild(buildMatchCard(round.matches[0]));
+        const gap = document.createElement('div');
+        gap.style.height = THIRD_GAP + 'px';
+        matchList.appendChild(gap);
+        if (round.matches[1]) matchList.appendChild(buildMatchCard(round.matches[1]));
+      } else {
+        round.matches.forEach(m => {
+          const slot = document.createElement('div');
+          slot.className = 'b-slot';
+          slot.appendChild(buildMatchCard(m));
+          matchList.appendChild(slot);
+        });
+      }
+
+      col.appendChild(matchList);
+      grid.appendChild(col);
+    });
+
+    requestAnimationFrame(drawBracketLines);
+    document.fonts.ready.then(drawBracketLines);
   } catch {
-    view.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Could not load bracket.</p>';
+    grid.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Could not load bracket.</p>';
   }
 }
 
