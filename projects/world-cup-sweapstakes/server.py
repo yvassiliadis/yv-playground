@@ -169,49 +169,90 @@ def _is_group_stage(stage: str) -> bool:
     return stage.startswith("GROUP_STAGE") or stage in _GROUP_STAGES
 
 
-_BRACKET_ROUND_ORDER = [
-    ("LAST_32", "Round of 32"),
-    ("LAST_16", "Round of 16"),
-    ("QUARTER_FINALS", "Quarter-Finals"),
-    ("SEMI_FINALS", "Semi-Finals"),
-    ("THIRD_PLACE", "Third Place"),
-    ("FINAL", "Final"),
+_BRACKET_ROUNDS = [
+    {"id": "r32",   "label": "Round of 32",    "stages": ["LAST_32"]},
+    {"id": "r16",   "label": "Round of 16",    "stages": ["LAST_16"]},
+    {"id": "qf",    "label": "Quarter-finals", "stages": ["QUARTER_FINALS"]},
+    {"id": "sf",    "label": "Semi-finals",    "stages": ["SEMI_FINALS"]},
+    {"id": "final", "label": "Final",          "stages": ["FINAL", "THIRD_PLACE"]},
 ]
+
+_MATCH_LABEL = {
+    "FINAL":       "Final",
+    "THIRD_PLACE": "3rd Place",
+}
+
+
+def _fmt_date_range(utc_dates: list[str]) -> str:
+    """Return a human-readable date range like 'Jun 28 – Jul 1' or 'Jul 19'."""
+    parsed = []
+    for d in utc_dates:
+        if not d:
+            continue
+        try:
+            parsed.append(datetime.fromisoformat(d.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    if not parsed:
+        return ""
+    lo, hi = min(parsed), max(parsed)
+    if lo.month == hi.month and lo.day == hi.day:
+        return f"{lo.strftime('%b')} {lo.day}"
+    elif lo.month == hi.month:
+        return f"{lo.strftime('%b')} {lo.day} – {hi.day}"
+    else:
+        return f"{lo.strftime('%b')} {lo.day} – {hi.strftime('%b')} {hi.day}"
 
 
 def _build_bracket(matches: list) -> dict:
-    rounds: dict[str, list] = {stage: [] for stage, _ in _BRACKET_ROUND_ORDER}
-
+    # Collect matches per stage
+    by_stage: dict[str, list] = {}
     for match in matches:
         stage = match.get("stage", "")
-        if stage not in rounds:
+        if not any(stage in r["stages"] for r in _BRACKET_ROUNDS):
             continue
-
-        home_raw = match.get("homeTeam", {}).get("name", "")
-        away_raw = match.get("awayTeam", {}).get("name", "")
-        home = _normalize_name(home_raw)
-        away = _normalize_name(away_raw)
-
-        status = match.get("status", "")
-        score_data = match.get("score", {})
-        full_time = score_data.get("fullTime", {})
-        hg = full_time.get("home")
-        ag = full_time.get("away")
-
-        rounds[stage].append({
-            "home": home if home in _KNOWN_TEAMS else "TBD",
-            "away": away if away in _KNOWN_TEAMS else "TBD",
-            "homeScore": hg,
-            "awayScore": ag,
-            "status": status,
-            "utcDate": match.get("utcDate"),
-        })
+        by_stage.setdefault(stage, []).append(match)
 
     result = []
-    for stage, label in _BRACKET_ROUND_ORDER:
-        stage_matches = sorted(rounds.get(stage, []), key=lambda m: m.get("utcDate") or "")
-        if stage_matches:
-            result.append({"label": label, "matches": stage_matches})
+    for round_def in _BRACKET_ROUNDS:
+        round_matches: list[dict] = []
+        utc_dates: list[str] = []
+
+        for stage in round_def["stages"]:
+            stage_matches = by_stage.get(stage, [])
+            stage_matches = sorted(stage_matches, key=lambda m: m.get("utcDate") or "")
+            match_label = _MATCH_LABEL.get(stage)
+
+            for match in stage_matches:
+                home_raw = match.get("homeTeam", {}).get("name", "")
+                away_raw = match.get("awayTeam", {}).get("name", "")
+                home = _normalize_name(home_raw)
+                away = _normalize_name(away_raw)
+
+                score_data = match.get("score", {})
+                full_time = score_data.get("fullTime", {})
+
+                utc_date = match.get("utcDate")
+                if utc_date:
+                    utc_dates.append(utc_date)
+
+                round_matches.append({
+                    "home":      home if home in _KNOWN_TEAMS else None,
+                    "away":      away if away in _KNOWN_TEAMS else None,
+                    "homeScore": full_time.get("home"),
+                    "awayScore": full_time.get("away"),
+                    "status":    match.get("status", ""),
+                    "utcDate":   utc_date,
+                    "label":     match_label,
+                })
+
+        if round_matches:
+            result.append({
+                "id":      round_def["id"],
+                "label":   round_def["label"],
+                "dates":   _fmt_date_range(utc_dates),
+                "matches": round_matches,
+            })
 
     return {"rounds": result}
 
@@ -540,7 +581,7 @@ async def get_bracket() -> dict:
             except Exception as exc:
                 log.error("Fetch failed: %s", exc)
                 raise HTTPException(
-                    status_code=503, detail="Failed to fetch bracket"
+                    status_code=503, detail="Failed to fetch scores"
                 ) from exc
             _cache.scores = scores
             _cache.matches = matches
