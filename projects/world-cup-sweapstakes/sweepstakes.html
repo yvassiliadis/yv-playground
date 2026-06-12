@@ -755,10 +755,22 @@
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="tab-btn active" data-tab="all">Rankings</button>
+    <button class="tab-btn" data-tab="results">Results</button>
+    <button class="tab-btn" data-tab="all">Rankings</button>
     <button class="tab-btn" data-tab="rules">Rules</button>
     <button class="tab-btn" data-tab="tiers">Tiers</button>
   </nav>
+
+  <!-- ========== TAB: RESULTS ========== -->
+  <section class="panel" id="panel-results">
+    <div class="section-label">// Group stage · Jun 11 – Jul 2</div>
+    <h2 class="head">Results</h2>
+    <div class="groups-legend">
+      <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
+      <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+    </div>
+    <div class="groups-grid" id="groupsGrid"></div>
+  </section>
 
   <!-- ========== TAB 1: RULES ========== -->
   <section class="panel" id="panel-rules">
@@ -851,7 +863,7 @@
   </section>
 
   <!-- ========== TAB 3: RANKINGS ========== -->
-  <section class="panel active" id="panel-all">
+  <section class="panel" id="panel-all">
     <div class="section-label">// Live leaderboard</div>
     <div class="table-meta">
       <div>
