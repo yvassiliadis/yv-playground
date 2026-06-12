@@ -1,0 +1,10 @@
+.env
+wc2026_odds.json
+tier_distribution.png
+assignments*.json
+assignments*.csv
+*.pdf
+RULES.html
+sweepstakes.html
+scope3_participants.txt
+participants_test.txt
