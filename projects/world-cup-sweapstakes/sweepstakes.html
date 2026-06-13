@@ -865,15 +865,15 @@
     <div class="rule-block">
       <div class="callout">
         <span class="ico">👟</span>
-        <span class="ctext"><b>Golden Boot bonus:</b> +5 pts if a player from one of your teams wins the Golden Boot (tournament top scorer).</span>
+        <span class="ctext"><b>Golden Boot bonus:</b> +5 pts if a player from one of your teams wins the Golden Boot (tournament top scorer). Will be applied at tournament end once the winner is confirmed.</span>
       </div>
     </div>
 
     <div class="rule-block">
       <div class="section-label" style="color:var(--text);">Maximum from a single team</div>
       <div class="stat-callout">
-        <div class="num">64<small> PTS</small></div>
-        <div class="calc">3 group wins (9) + R32 (2) + R16 (3) + QF (5) + SF (8) + Final (12) + Win WC (20) + Golden Boot (5) = 64</div>
+        <div class="num">59<small> PTS</small></div>
+        <div class="calc">3 group wins (9) + R32 (2) + R16 (3) + QF (5) + SF (8) + Final (12) + Win WC (20) = 59 pts (+ Golden Boot bonus at tournament end)</div>
       </div>
     </div>
 
@@ -1113,7 +1113,7 @@ function isParticipantEliminated(r) {
 }
 function koPoints(ko) { return KO_PTS[ko] || 0; }
 function teamTotal(s) {
-  return s.gw*3 + s.gd + koPoints(s.ko) + (s.third==="won"?3:0) + (s.boot?5:0);
+  return s.gw*3 + s.gd + koPoints(s.ko) + (s.third==="won"?3:0);
 }
 
 let ROWS_BASE = [];
@@ -1463,7 +1463,6 @@ function breakdownHTML(r) {
     }
     if (s.third === "won")  lines += `<div class="bd-line"><span>3rd place win</span><span>+3 pts</span></div>`;
     if (s.third === "lost") lines += `<div class="bd-line"><span>3rd place loss</span><span>+0 pts</span></div>`;
-    if (s.boot) lines += `<div class="bd-line"><span>Golden Boot 👟</span><span>+5 pts</span></div>`;
     if (s.gf || s.ga) lines += `<div class="bd-line"><span>Goals for / against</span><span>${s.gf} / ${s.ga}</span></div>`;
     if (!lines) lines = `<div class="bd-line"><span>No results yet</span><span>—</span></div>`;
     return `<div class="bd-card t${tier}${isEliminated(team) ? ' team-out' : ''}">
