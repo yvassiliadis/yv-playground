@@ -241,5 +241,6 @@ def tracked_portfolios_performance(
             comm_value = sum(closes[t] * cw[t] for t in available_ct)
             result["committee"] = {"type": "committee", **summary(comm_value)}
 
-    _save_tracker_cache(portfolios, committee, since, result)
+    if result:
+        _save_tracker_cache(portfolios, committee, since, result)
     return result
