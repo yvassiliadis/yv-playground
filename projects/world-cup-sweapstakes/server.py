@@ -489,7 +489,7 @@ async def _broadcast(payload: dict) -> None:
             q.put_nowait(payload)
         except asyncio.QueueFull:
             dead.add(q)
-    _subscribers -= dead
+    _subscribers.difference_update(dead)
 
 
 async def _poll_loop() -> None:

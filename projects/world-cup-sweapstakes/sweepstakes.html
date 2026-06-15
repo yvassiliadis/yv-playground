@@ -801,18 +801,15 @@
   .sched-team { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .sched-team span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sched-team.away { flex-direction: row-reverse; text-align: right; }
-  .sched-score { font-family: var(--mono); font-size: .82rem; font-weight: 500; text-align: center; min-width: 40px; }
-  .sched-score.upcoming { color: var(--muted); font-size: .62rem; letter-spacing: .04em; }
-  .sched-score.live { color: var(--red); }
+  .sched-score { font-family: var(--mono); font-size: .82rem; font-weight: 500; text-align: center; min-width: 44px; }
+  .sched-score.upcoming { color: var(--muted); font-size: .62rem; letter-spacing: .04em; font-weight: 400; }
+  .sched-score.live { display: inline-flex; align-items: center; gap: 6px; color: var(--red); }
+  .sched-score.ft { color: var(--muted); }
   .sched-label { font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); min-width: 64px; text-align: right; }
   .sched-match.finished .sched-team { opacity: .65; }
   .sched-match.live-row .sched-team { opacity: 1; }
   .sched-live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: .58rem; color: var(--red); letter-spacing: .15em; text-transform: uppercase; }
   .sched-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); animation: pulse 1.8s infinite; flex-shrink: 0; }
-  .sched-score.live { display: inline-flex; align-items: center; gap: 4px; color: var(--red); }
-  .sched-min { font-family: var(--mono); font-size: .58rem; opacity: .8; }
-  .sched-period { font-family: var(--mono); font-size: .56rem; letter-spacing: .04em; opacity: .75; }
-  .sched-score.ft { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1689,18 +1686,11 @@ function _applySchedule(groupsData, bracketData) {
       const homeName = m.home || 'TBD';
       const awayName = m.away || 'TBD';
       const sc = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
-      const min = m.minute ? `<span class="sched-min">${m.minute}'</span>` : '';
       let scoreHtml;
-      if (isPaused) {
-        scoreHtml = `<span class="sched-score live">${sc}<span class="sched-period">HT</span><span class="sched-live-dot"></span></span>`;
+      if (isLive) {
+        scoreHtml = `<span class="sched-score live"><span class="sched-live-dot"></span>${sc}</span>`;
       } else if (isFinished) {
-        scoreHtml = `<span class="sched-score ft">${m.homeScore}–${m.awayScore}<span class="sched-period">FT</span></span>`;
-      } else if (isInPlay && m.duration === 'PENALTY_SHOOTOUT') {
-        scoreHtml = `<span class="sched-score live">${sc}${min}<span class="sched-period">PK</span><span class="sched-live-dot"></span></span>`;
-      } else if (isInPlay && m.duration === 'EXTRA_TIME') {
-        scoreHtml = `<span class="sched-score live">${sc}${min}<span class="sched-period">ET</span><span class="sched-live-dot"></span></span>`;
-      } else if (isInPlay) {
-        scoreHtml = `<span class="sched-score live">${sc}${min}<span class="sched-live-dot"></span></span>`;
+        scoreHtml = `<span class="sched-score ft">${m.homeScore}–${m.awayScore}</span>`;
       } else {
         scoreHtml = `<span class="sched-score upcoming">vs</span>`;
       }
