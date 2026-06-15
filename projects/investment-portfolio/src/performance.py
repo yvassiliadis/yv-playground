@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -6,10 +8,17 @@ from typing import Optional
 import pandas as pd
 import yfinance as yf
 
+log = logging.getLogger(__name__)
+
+_DOWNLOAD_MAX_RETRIES = 3
+_DOWNLOAD_INITIAL_BACKOFF_SECONDS = 1.0
+
 BENCHMARKS = ["SPY", "VGT", "VTI"]
 
 _PERF_CACHE_PATH = Path(__file__).parent.parent / "data" / "perf_cache.json"
-_TRACKER_PERF_CACHE_PATH = Path(__file__).parent.parent / "data" / "tracker_perf_cache.json"
+_TRACKER_PERF_CACHE_PATH = (
+    Path(__file__).parent.parent / "data" / "tracker_perf_cache.json"
+)
 _PERF_CACHE_TTL_SECONDS = 4 * 3600
 
 
@@ -50,9 +59,27 @@ def _save_perf_cache(tickers: list[str], since: date, df: pd.DataFrame) -> None:
         pass
 
 
+def _download_prices(tickers: list[str], start: date) -> pd.DataFrame:
+    """Downloads price data with retry on empty result (Yahoo Finance rate limits)."""
+    backoff = _DOWNLOAD_INITIAL_BACKOFF_SECONDS
+    for attempt in range(_DOWNLOAD_MAX_RETRIES):
+        raw = yf.download(tickers, start=start, auto_adjust=True, progress=False)
+        if not raw.empty:
+            return raw
+        if attempt < _DOWNLOAD_MAX_RETRIES - 1:
+            log.warning("yfinance returned empty data, retrying in %.0fs", backoff)
+            time.sleep(backoff)
+            backoff *= 2
+    return raw
+
+
 def _fetch_returns(tickers: list[str], start: date) -> pd.DataFrame:
-    raw = yf.download(tickers, start=start, auto_adjust=True, progress=False)
+    raw = _download_prices(tickers, start=start)
     closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+    if closes.empty:
+        raise ValueError(
+            f"No price data available for {len(tickers)} tickers from {start}"
+        )
     return closes / closes.iloc[0]
 
 
@@ -72,7 +99,11 @@ def portfolio_vs_benchmarks(
 
     returns = _load_perf_cache(all_tickers, since)
     if returns is None:
-        returns = _fetch_returns(all_tickers, since)
+        try:
+            returns = _fetch_returns(all_tickers, since)
+        except ValueError:
+            log.warning("Price fetch failed for performance chart, returning empty")
+            return {}
         _save_perf_cache(all_tickers, since, returns)
 
     weights = {t: w / 100 for t, w in zip(portfolio_tickers, portfolio_weights)}
@@ -94,9 +125,7 @@ def portfolio_vs_benchmarks(
     return result
 
 
-def _tracker_cache_key(
-    portfolios: list, committee: Optional[dict], since: date
-) -> str:
+def _tracker_cache_key(portfolios: list, committee: Optional[dict], since: date) -> str:
     parts = []
     for p in sorted(portfolios, key=lambda x: x.name):
         pos_str = ",".join(
@@ -171,9 +200,7 @@ def tracked_portfolios_performance(
     if committee:
         all_tickers.update(committee["tickers"])
 
-    raw = yf.download(
-        list(all_tickers), start=since, auto_adjust=True, progress=False
-    )
+    raw = _download_prices(list(all_tickers), start=since)
     closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
 
     def summary(series: pd.Series) -> dict:
