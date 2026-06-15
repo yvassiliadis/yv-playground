@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 import os
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -511,6 +511,7 @@ async def _poll_loop() -> None:
             log.warning("Background poll failed: %s", exc)
 
 
+@asynccontextmanager
 async def _lifespan(app: FastAPI):
     task = asyncio.create_task(_poll_loop())
     try:
