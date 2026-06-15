@@ -247,6 +247,7 @@ def _build_bracket(matches: list) -> dict:
                     "status":    match.get("status", ""),
                     "utcDate":   utc_date,
                     "label":     match_label,
+                    "minute":    match.get("minute"),
                 })
 
         if round_matches:
@@ -333,6 +334,7 @@ def _build_groups(matches: list) -> dict:
             "status": status,
             "utcDate": match.get("utcDate"),
             "matchday": match.get("matchday"),
+            "minute": match.get("minute"),
         })
 
     result = {}

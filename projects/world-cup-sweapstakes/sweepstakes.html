@@ -809,7 +809,8 @@
   .sched-match.live-row .sched-team { opacity: 1; }
   .sched-live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: .58rem; color: var(--red); letter-spacing: .15em; text-transform: uppercase; }
   .sched-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); animation: pulse 1.8s infinite; flex-shrink: 0; }
-  .sched-score.live { display: inline-flex; align-items: center; gap: 5px; color: var(--red); }
+  .sched-score.live { display: inline-flex; align-items: center; gap: 4px; color: var(--red); }
+  .sched-min { font-family: var(--mono); font-size: .58rem; opacity: .8; }
 </style>
 </head>
 <body>
@@ -1685,7 +1686,8 @@ function _applySchedule(groupsData, bracketData) {
       const awayName = m.away || 'TBD';
       let scoreHtml;
       if (isLive) {
-        scoreHtml = `<span class="sched-score live"><span class="sched-live-dot"></span>${m.homeScore ?? 0}–${m.awayScore ?? 0}</span>`;
+        const min = m.minute ? `<span class="sched-min">${m.minute}'</span>` : '';
+        scoreHtml = `<span class="sched-score live">${m.homeScore ?? 0}–${m.awayScore ?? 0}${min}<span class="sched-live-dot"></span></span>`;
       } else if (isFinished) {
         scoreHtml = `<span class="sched-score">${m.homeScore} – ${m.awayScore}</span>`;
       } else {
