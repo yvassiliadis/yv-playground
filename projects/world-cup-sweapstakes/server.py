@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 import os
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -511,17 +511,14 @@ async def _poll_loop() -> None:
             log.warning("Background poll failed: %s", exc)
 
 
-@asynccontextmanager
-async def _lifespan(app: FastAPI):
-    task = asyncio.create_task(_poll_loop())
-    try:
-        yield
-    finally:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+_poll_task: asyncio.Task | None = None
 
-app.router.lifespan_context = _lifespan
+
+def _ensure_poll_task() -> None:
+    global _poll_task
+    if _poll_task is None or _poll_task.done():
+        _poll_task = asyncio.create_task(_poll_loop())
+        log.info("Background poll task started")
 
 
 def _needs_refresh(matches: list) -> bool:
@@ -659,19 +656,31 @@ async def get_bracket() -> dict:
 
 @app.get("/api/live")
 async def live_updates() -> StreamingResponse:
+    _ensure_poll_task()
+
+    # Always fetch fresh data on connect so the client gets live state immediately
+    try:
+        async with _fetch_lock:
+            scores, matches = await _fetch_scores()
+            _cache.scores = scores
+            _cache.matches = matches
+            _cache.fetched_at = datetime.now(tz=timezone.utc)
+        initial = {
+            "scores":  _cache.scores,
+            "groups":  _build_groups(_cache.matches),
+            "bracket": _build_bracket(_cache.matches),
+        }
+    except Exception as exc:
+        log.warning("Initial fetch on SSE connect failed: %s", exc)
+        initial = None
+
     q: asyncio.Queue = asyncio.Queue(maxsize=10)
     _subscribers.add(q)
 
     async def stream():
         try:
-            # Send current cached state immediately on connect
-            if _cache.scores is not None:
-                payload = {
-                    "scores":  _cache.scores,
-                    "groups":  _build_groups(_cache.matches),
-                    "bracket": _build_bracket(_cache.matches),
-                }
-                yield f"data: {json.dumps(payload)}\n\n"
+            if initial:
+                yield f"data: {json.dumps(initial)}\n\n"
             while True:
                 try:
                     payload = await asyncio.wait_for(q.get(), timeout=25)
