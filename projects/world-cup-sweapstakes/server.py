@@ -9,8 +9,10 @@
 # ///
 
 import asyncio
+import json
 import logging
 import os
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,7 +20,7 @@ import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -127,6 +129,7 @@ class Cache:
 
 _cache = Cache()
 _fetch_lock = asyncio.Lock()
+_subscribers: set[asyncio.Queue] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -457,6 +460,69 @@ def _build_scores(matches: list, scorers: list) -> dict:
     return scores
 
 
+def _in_match_window(matches: list) -> bool:
+    """True when a match is live or kicking off within the next 15 min or finished within 3 h."""
+    now = datetime.now(tz=timezone.utc)
+    for match in matches:
+        if match.get("status") in ("IN_PLAY", "PAUSED"):
+            return True
+        utc_date = match.get("utcDate")
+        if not utc_date:
+            continue
+        try:
+            kickoff = datetime.fromisoformat(utc_date.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if kickoff - timedelta(minutes=15) <= now <= kickoff + timedelta(hours=3):
+            return True
+    return False
+
+
+async def _broadcast(payload: dict) -> None:
+    dead = set()
+    for q in _subscribers:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            dead.add(q)
+    _subscribers -= dead
+
+
+async def _poll_loop() -> None:
+    while True:
+        await asyncio.sleep(30)
+        if not _subscribers:
+            continue
+        if not _in_match_window(_cache.matches or []):
+            continue
+        try:
+            scores, matches = await _fetch_scores()
+            _cache.scores = scores
+            _cache.matches = matches
+            _cache.fetched_at = datetime.now(tz=timezone.utc)
+            payload = {
+                "scores":  scores,
+                "groups":  _build_groups(matches),
+                "bracket": _build_bracket(matches),
+            }
+            await _broadcast(payload)
+            log.info("Live update broadcast to %d subscriber(s)", len(_subscribers))
+        except Exception as exc:
+            log.warning("Background poll failed: %s", exc)
+
+
+async def _lifespan(app: FastAPI):
+    task = asyncio.create_task(_poll_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+app.router.lifespan_context = _lifespan
+
+
 def _needs_refresh(matches: list) -> bool:
     """Return True if any unfinished match is in its result window (kickoff+2h to kickoff+6h)."""
     now = datetime.now(tz=timezone.utc)
@@ -588,6 +654,37 @@ async def get_bracket() -> dict:
             _cache.fetched_at = datetime.now(tz=timezone.utc)
 
     return _build_bracket(_cache.matches)  # type: ignore[arg-type]
+
+
+@app.get("/api/live")
+async def live_updates() -> StreamingResponse:
+    q: asyncio.Queue = asyncio.Queue(maxsize=10)
+    _subscribers.add(q)
+
+    async def stream():
+        try:
+            # Send current cached state immediately on connect
+            if _cache.scores is not None:
+                payload = {
+                    "scores":  _cache.scores,
+                    "groups":  _build_groups(_cache.matches),
+                    "bracket": _build_bracket(_cache.matches),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+            while True:
+                try:
+                    payload = await asyncio.wait_for(q.get(), timeout=25)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            _subscribers.discard(q)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -807,6 +807,9 @@
   .sched-label { font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); min-width: 64px; text-align: right; }
   .sched-match.finished .sched-team { opacity: .65; }
   .sched-match.live-row .sched-team { opacity: 1; }
+  .sched-live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: .58rem; color: var(--red); letter-spacing: .15em; text-transform: uppercase; }
+  .sched-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); animation: pulse 1.8s infinite; flex-shrink: 0; }
+  .sched-score.live { display: inline-flex; align-items: center; gap: 5px; color: var(--red); }
 </style>
 </head>
 <body>
@@ -1250,6 +1253,15 @@ function buildGroupCard(letter, group) {
   return card;
 }
 
+function _applyGroups(data) {
+  groupsLoaded = true;
+  const grid = document.getElementById('groupsGrid');
+  grid.innerHTML = '';
+  for (const [letter, group] of Object.entries(data)) {
+    grid.appendChild(buildGroupCard(letter, group));
+  }
+}
+
 async function initGroups() {
   if (groupsLoaded) return;
   const grid = document.getElementById('groupsGrid');
@@ -1257,12 +1269,7 @@ async function initGroups() {
   try {
     const res = await fetch('/api/groups');
     if (!res.ok) throw new Error();
-    const data = await res.json();
-    groupsLoaded = true;
-    grid.innerHTML = '';
-    for (const [letter, group] of Object.entries(data)) {
-      grid.appendChild(buildGroupCard(letter, group));
-    }
+    _applyGroups(await res.json());
   } catch {
     grid.innerHTML = '<p style="color:var(--muted);padding:20px;font-family:var(--mono);font-size:.8rem;">Could not load group data.</p>';
   }
@@ -1365,17 +1372,11 @@ function drawBracketLines() {
   });
 }
 
-async function initBracket() {
-  if (bracketLoaded) return;
+function _applyBracket(data) {
+  bracketLoaded = true;
   const grid = document.getElementById('bracketGrid');
-  grid.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Loading…</p>';
-  try {
-    const res = await fetch('/api/bracket');
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    grid.innerHTML = '';
-
-    data.rounds.forEach(round => {
+  grid.innerHTML = '';
+  data.rounds.forEach(round => {
       const col = document.createElement('div');
       col.className = 'round-col';
       col.dataset.round = round.id;
@@ -1419,10 +1420,18 @@ async function initBracket() {
       col.appendChild(matchList);
       grid.appendChild(col);
     });
+  requestAnimationFrame(drawBracketLines);
+  document.fonts.ready.then(drawBracketLines);
+}
 
-    bracketLoaded = true;
-    requestAnimationFrame(drawBracketLines);
-    document.fonts.ready.then(drawBracketLines);
+async function initBracket() {
+  if (bracketLoaded) return;
+  const grid = document.getElementById('bracketGrid');
+  grid.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Loading…</p>';
+  try {
+    const res = await fetch('/api/bracket');
+    if (!res.ok) throw new Error();
+    _applyBracket(await res.json());
   } catch {
     grid.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Could not load bracket.</p>';
   }
@@ -1436,22 +1445,8 @@ function setResultsOrder() {
   );
 }
 
-async function initRankings() {
-  scoresNote.textContent = 'Fetching live scores…';
-  assignBody.innerHTML = '<tr><td colspan="7" class="no-results">Loading…</td></tr>';
-  try {
-    const res = await fetch('/api/scores');
-    if (res.ok) {
-      SCORES = await res.json();
-      const t = new Date().toLocaleString('en-US', {timeZone:'America/New_York', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true, timeZoneName:'short'});
-      scoresNote.textContent = `Last updated ${t}`;
-    } else {
-      scoresNote.textContent = 'Could not load scores — server error.';
-    }
-  } catch {
-    scoresNote.textContent = 'Offline — scores unavailable.';
-  }
-
+function _applyScores(scores) {
+  SCORES = scores;
   ROWS_BASE = Object.keys(ASSIGNMENTS).map(name => {
     const a = ASSIGNMENTS[name];
     const teams = [a.tier_1, a.tier_2, a.tier_3, a.tier_4];
@@ -1472,8 +1467,24 @@ async function initRankings() {
       t4score:  totals[3]
     };
   });
-
   renderTable();
+  const t = new Date().toLocaleString('en-US', {timeZone:'America/New_York', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true, timeZoneName:'short'});
+  scoresNote.textContent = `Updated ${t}`;
+}
+
+async function initRankings() {
+  scoresNote.textContent = 'Fetching live scores…';
+  assignBody.innerHTML = '<tr><td colspan="7" class="no-results">Loading…</td></tr>';
+  try {
+    const res = await fetch('/api/scores');
+    if (res.ok) {
+      _applyScores(await res.json());
+    } else {
+      scoresNote.textContent = 'Could not load scores — server error.';
+    }
+  } catch {
+    scoresNote.textContent = 'Offline — scores unavailable.';
+  }
 }
 
 /* All 7 tie-breakers applied in order when sorting by total */
@@ -1613,6 +1624,91 @@ tableFilter.addEventListener('input', renderTable);
 /* ============ TAB: SCHEDULE ============ */
 let scheduleLoaded = false;
 
+function _applySchedule(groupsData, bracketData) {
+  const list = document.getElementById('scheduleList');
+  const openDays = new Set(
+    Array.from(list.querySelectorAll('.sched-day.open')).map(el => el.dataset.dayLabel)
+  );
+
+  const matches = [];
+  for (const [letter, group] of Object.entries(groupsData)) {
+    for (const m of group.matches) matches.push({ ...m, label: `Group ${letter}` });
+  }
+  const ROUND_LABEL = { r32: 'Round of 32', r16: 'Round of 16', qf: 'Quarter-final', sf: 'Semi-final', final: 'Final' };
+  for (const round of bracketData.rounds) {
+    for (const m of round.matches) {
+      if (m.utcDate) matches.push({ ...m, label: m.label || ROUND_LABEL[round.id] || round.label });
+    }
+  }
+  matches.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+
+  const byDay = new Map();
+  for (const m of matches) {
+    const key = new Date(m.utcDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(m);
+  }
+
+  const todayKey = new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+  list.innerHTML = '';
+  for (const [dayLabel, dayMatches] of byDay) {
+    const isToday = dayLabel === todayKey;
+    const wasOpen = openDays.has(dayLabel);
+    const dayHasLive = dayMatches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+
+    const day = document.createElement('div');
+    day.className = 'sched-day' + (isToday || wasOpen ? ' open' : '') + (isToday ? ' today' : '');
+    day.dataset.dayLabel = dayLabel;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'sched-day-hdr';
+    hdr.innerHTML = `
+      <div class="sched-day-left">
+        <span class="sched-day-date">${esc(dayLabel)}</span>
+        <span class="sched-day-count">${dayMatches.length} match${dayMatches.length !== 1 ? 'es' : ''}</span>
+        ${dayHasLive ? '<span class="sched-live-badge"><span class="sched-live-dot"></span>Live</span>' : ''}
+      </div>
+      <span class="sched-chevron">▾</span>`;
+    hdr.addEventListener('click', () => day.classList.toggle('open'));
+
+    const body = document.createElement('div');
+    body.className = 'sched-body';
+
+    for (const m of dayMatches) {
+      const isLive     = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+      const isFinished = m.status === 'FINISHED';
+      const { time } = fmtDt(m.utcDate);
+      const homeFlag = m.home ? flag(m.home) : '🏳️';
+      const awayFlag = m.away ? flag(m.away) : '🏳️';
+      const homeName = m.home || 'TBD';
+      const awayName = m.away || 'TBD';
+      let scoreHtml;
+      if (isLive) {
+        scoreHtml = `<span class="sched-score live"><span class="sched-live-dot"></span>${m.homeScore ?? 0}–${m.awayScore ?? 0}</span>`;
+      } else if (isFinished) {
+        scoreHtml = `<span class="sched-score">${m.homeScore} – ${m.awayScore}</span>`;
+      } else {
+        scoreHtml = `<span class="sched-score upcoming">vs</span>`;
+      }
+      const row = document.createElement('div');
+      row.className = 'sched-match' + (isFinished ? ' finished' : '') + (isLive ? ' live-row' : '');
+      row.innerHTML = `
+        <div class="sched-time">${esc(time)}</div>
+        <div class="sched-team">${homeFlag}<span>${esc(homeName)}</span></div>
+        ${scoreHtml}
+        <div class="sched-team away">${awayFlag}<span>${esc(awayName)}</span></div>
+        <div class="sched-label">${esc(m.label || '')}</div>`;
+      body.appendChild(row);
+    }
+
+    day.appendChild(hdr);
+    day.appendChild(body);
+    list.appendChild(day);
+  }
+  scheduleLoaded = true;
+}
+
 async function initSchedule() {
   if (scheduleLoaded) return;
   const list = document.getElementById('scheduleList');
@@ -1620,88 +1716,7 @@ async function initSchedule() {
   try {
     const [groupsRes, bracketRes] = await Promise.all([fetch('/api/groups'), fetch('/api/bracket')]);
     if (!groupsRes.ok || !bracketRes.ok) throw new Error();
-    const [groupsData, bracketData] = await Promise.all([groupsRes.json(), bracketRes.json()]);
-
-    const matches = [];
-
-    for (const [letter, group] of Object.entries(groupsData)) {
-      for (const m of group.matches) {
-        matches.push({ ...m, label: `Group ${letter}` });
-      }
-    }
-    const ROUND_LABEL = { r32: 'Round of 32', r16: 'Round of 16', qf: 'Quarter-final', sf: 'Semi-final', final: 'Final' };
-    for (const round of bracketData.rounds) {
-      for (const m of round.matches) {
-        if (m.utcDate) matches.push({ ...m, label: m.label || ROUND_LABEL[round.id] || round.label });
-      }
-    }
-
-    matches.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-
-    const byDay = new Map();
-    for (const m of matches) {
-      const d = new Date(m.utcDate);
-      const key = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      if (!byDay.has(key)) byDay.set(key, { date: d, matches: [] });
-      byDay.get(key).matches.push(m);
-    }
-
-    const todayKey = new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-
-    list.innerHTML = '';
-    for (const [dayLabel, { date, matches: dayMatches }] of byDay) {
-      const isToday = dayLabel === todayKey;
-
-      const day = document.createElement('div');
-      day.className = 'sched-day' + (isToday ? ' today open' : '');
-
-      const hdr = document.createElement('div');
-      hdr.className = 'sched-day-hdr';
-      hdr.innerHTML = `
-        <div class="sched-day-left">
-          <span class="sched-day-date">${esc(dayLabel)}</span>
-          <span class="sched-day-count">${dayMatches.length} match${dayMatches.length !== 1 ? 'es' : ''}</span>
-        </div>
-        <span class="sched-chevron">▾</span>`;
-      hdr.addEventListener('click', () => day.classList.toggle('open'));
-
-      const body = document.createElement('div');
-      body.className = 'sched-body';
-
-      for (const m of dayMatches) {
-        const isLive     = m.status === 'IN_PLAY' || m.status === 'PAUSED';
-        const isFinished = m.status === 'FINISHED';
-        const { time } = fmtDt(m.utcDate);
-        const homeFlag = m.home ? flag(m.home) : '🏳️';
-        const awayFlag = m.away ? flag(m.away) : '🏳️';
-        const homeName = m.home || 'TBD';
-        const awayName = m.away || 'TBD';
-
-        let scoreHtml;
-        if (isLive) {
-          scoreHtml = `<span class="sched-score live">${m.homeScore ?? 0} – ${m.awayScore ?? 0}</span>`;
-        } else if (isFinished) {
-          scoreHtml = `<span class="sched-score">${m.homeScore} – ${m.awayScore}</span>`;
-        } else {
-          scoreHtml = `<span class="sched-score upcoming">vs</span>`;
-        }
-
-        const row = document.createElement('div');
-        row.className = 'sched-match' + (isFinished ? ' finished' : '') + (isLive ? ' live-row' : '');
-        row.innerHTML = `
-          <div class="sched-time">${esc(time)}</div>
-          <div class="sched-team">${homeFlag}<span>${esc(homeName)}</span></div>
-          ${scoreHtml}
-          <div class="sched-team away">${awayFlag}<span>${esc(awayName)}</span></div>
-          <div class="sched-label">${esc(m.label || '')}</div>`;
-        body.appendChild(row);
-      }
-
-      day.appendChild(hdr);
-      day.appendChild(body);
-      list.appendChild(day);
-    }
-    scheduleLoaded = true;
+    _applySchedule(await groupsRes.json(), await bracketRes.json());
   } catch {
     list.innerHTML = '<p style="color:var(--muted);padding:20px 0;font-family:var(--mono);font-size:.8rem;">Could not load schedule.</p>';
   }
@@ -1720,6 +1735,18 @@ function activateDefaultTab() {
 activateDefaultTab();
 
 initRankings();
+
+function connectLive() {
+  const es = new EventSource('/api/live');
+  es.onmessage = e => {
+    const { scores, groups, bracket } = JSON.parse(e.data);
+    _applyScores(scores);
+    if (groupsLoaded)   _applyGroups(groups);
+    if (bracketLoaded)  _applyBracket(bracket);
+    if (scheduleLoaded) _applySchedule(groups, bracket);
+  };
+}
+connectLive();
 
 /* ============ TAB 4: TIERS ============ */
 const tiersWrap = document.getElementById('tiersWrap');
