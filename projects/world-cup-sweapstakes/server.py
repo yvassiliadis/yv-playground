@@ -248,6 +248,7 @@ def _build_bracket(matches: list) -> dict:
                     "utcDate":   utc_date,
                     "label":     match_label,
                     "minute":    match.get("minute"),
+                    "duration":  score_data.get("duration"),
                 })
 
         if round_matches:
@@ -335,6 +336,7 @@ def _build_groups(matches: list) -> dict:
             "utcDate": match.get("utcDate"),
             "matchday": match.get("matchday"),
             "minute": match.get("minute"),
+            "duration": score_data.get("duration"),
         })
 
     result = {}

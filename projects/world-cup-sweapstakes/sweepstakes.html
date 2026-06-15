@@ -811,6 +811,8 @@
   .sched-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); animation: pulse 1.8s infinite; flex-shrink: 0; }
   .sched-score.live { display: inline-flex; align-items: center; gap: 4px; color: var(--red); }
   .sched-min { font-family: var(--mono); font-size: .58rem; opacity: .8; }
+  .sched-period { font-family: var(--mono); font-size: .56rem; letter-spacing: .04em; opacity: .75; }
+  .sched-score.ft { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1677,19 +1679,28 @@ function _applySchedule(groupsData, bracketData) {
     body.className = 'sched-body';
 
     for (const m of dayMatches) {
-      const isLive     = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+      const isInPlay   = m.status === 'IN_PLAY';
+      const isPaused   = m.status === 'PAUSED';
       const isFinished = m.status === 'FINISHED';
+      const isLive     = isInPlay || isPaused;
       const { time } = fmtDt(m.utcDate);
       const homeFlag = m.home ? flag(m.home) : '🏳️';
       const awayFlag = m.away ? flag(m.away) : '🏳️';
       const homeName = m.home || 'TBD';
       const awayName = m.away || 'TBD';
+      const sc = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
+      const min = m.minute ? `<span class="sched-min">${m.minute}'</span>` : '';
       let scoreHtml;
-      if (isLive) {
-        const min = m.minute ? `<span class="sched-min">${m.minute}'</span>` : '';
-        scoreHtml = `<span class="sched-score live">${m.homeScore ?? 0}–${m.awayScore ?? 0}${min}<span class="sched-live-dot"></span></span>`;
+      if (isPaused) {
+        scoreHtml = `<span class="sched-score live">${sc}<span class="sched-period">HT</span><span class="sched-live-dot"></span></span>`;
       } else if (isFinished) {
-        scoreHtml = `<span class="sched-score">${m.homeScore} – ${m.awayScore}</span>`;
+        scoreHtml = `<span class="sched-score ft">${m.homeScore}–${m.awayScore}<span class="sched-period">FT</span></span>`;
+      } else if (isInPlay && m.duration === 'PENALTY_SHOOTOUT') {
+        scoreHtml = `<span class="sched-score live">${sc}${min}<span class="sched-period">PK</span><span class="sched-live-dot"></span></span>`;
+      } else if (isInPlay && m.duration === 'EXTRA_TIME') {
+        scoreHtml = `<span class="sched-score live">${sc}${min}<span class="sched-period">ET</span><span class="sched-live-dot"></span></span>`;
+      } else if (isInPlay) {
+        scoreHtml = `<span class="sched-score live">${sc}${min}<span class="sched-live-dot"></span></span>`;
       } else {
         scoreHtml = `<span class="sched-score upcoming">vs</span>`;
       }
