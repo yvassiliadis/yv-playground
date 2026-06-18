@@ -42,10 +42,11 @@ Each participant is randomly assigned **one team per tier** (4 teams total). Som
 | Win 3rd place | +3 pts |
 | Lose 3rd place | +0 pts |
 
-### Bonus
-| Bonus | Points |
-|-------|--------|
-| Your team's player wins the Golden Boot | +5 pts |
+### Golden Boot Bonus
+
++5 pts if a player from one of your teams wins the Golden Boot (tournament top scorer).
+
+**Dead-heat rule:** if N players finish tied on goals, the 5 pts are split equally — each of their teams receives 5/N pts. For example, if two players tie, each team gets +2.5 pts.
 
 ### Example Scenarios
 
