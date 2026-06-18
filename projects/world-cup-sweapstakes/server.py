@@ -98,6 +98,14 @@ _NAME_MAP: dict[str, str] = {
     "Turkey": "Türkiye",
 }
 
+# Golden Boot points are awarded once the tournament is over (after the Final on Jul 19 2026)
+_GOLDEN_BOOT_AFTER = datetime(2026, 7, 20, tzinfo=timezone.utc)
+
+
+def _golden_boot_final() -> bool:
+    return datetime.now(tz=timezone.utc) >= _GOLDEN_BOOT_AFTER
+
+
 # Ordered from least to most advanced — used for ko comparison
 _KO_ORDER = ["", "r32", "r16", "qf", "sf", "final", "winner"]
 
@@ -450,16 +458,18 @@ def _build_scores(matches: list, scorers: list) -> dict:
                     scores[away]["gf"] += ag
                     scores[away]["ga"] += hg
 
-    # Golden boot — dead-heat rules: 5 pts split equally among N tied leaders
+    # Golden boot — dead-heat rules: 5 pts split equally among N tied leaders.
+    # Points are only awarded once GOLDEN_BOOT_FINAL is True.
     if scorers:
         top_goals = max((s.get("goals", 0) or 0 for s in scorers), default=0)
         if top_goals > 0:
             leaders = [s for s in scorers if (s.get("goals", 0) or 0) == top_goals]
             boot_pts = 5 / len(leaders)
-            for leader in leaders:
-                team = _normalize_name(leader.get("team", {}).get("name", ""))
-                if team in scores:
-                    scores[team]["boot"] = boot_pts
+            if _golden_boot_final():
+                for leader in leaders:
+                    team = _normalize_name(leader.get("team", {}).get("name", ""))
+                    if team in scores:
+                        scores[team]["boot"] = boot_pts
             scores["_goldenBoot"] = {
                 "leaders": [
                     {
@@ -470,6 +480,7 @@ def _build_scores(matches: list, scorers: list) -> dict:
                 ],
                 "goals": top_goals,
                 "bootPts": boot_pts,
+                "awarded": _golden_boot_final(),
             }
 
     return scores

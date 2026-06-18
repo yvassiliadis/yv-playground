@@ -1455,12 +1455,13 @@ function _applyScores(scores) {
     if (goldenBoot) {
       const pts = goldenBoot.bootPts;
       const ptsStr = Number.isInteger(pts) ? `${pts}` : pts.toFixed(2);
+      const suffix = goldenBoot.awarded ? `+${ptsStr} pts awarded` : `+${ptsStr} pts — not yet awarded`;
       if (goldenBoot.leaders.length === 1) {
         const l = goldenBoot.leaders[0];
-        bootNote.textContent = `👟 Golden Boot leader: ${l.player} (${l.team}, ${goldenBoot.goals} goals) — +${ptsStr} pts`;
+        bootNote.textContent = `👟 Golden Boot leader: ${l.player} (${l.team}, ${goldenBoot.goals} goals) — ${suffix}`;
       } else {
         const names = goldenBoot.leaders.map(l => `${l.player} (${l.team})`).join(', ');
-        bootNote.textContent = `👟 Golden Boot tied — ${goldenBoot.leaders.length} players on ${goldenBoot.goals} goals: ${names} — dead heat: +${ptsStr} pts each`;
+        bootNote.textContent = `👟 Golden Boot tied — ${goldenBoot.leaders.length} players on ${goldenBoot.goals} goals: ${names} — dead heat: ${suffix}`;
       }
     } else {
       bootNote.textContent = '';
