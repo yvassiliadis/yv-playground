@@ -964,12 +964,13 @@
     <div class="table-meta">
       <div>
         <h2 class="head">Rankings</h2>
-        <span class="count-chip" id="countChip">53 participants</span>
+        <span class="count-chip" id="countChip">52 participants</span>
       </div>
       <input class="filter-input" id="tableFilter" type="text"
              placeholder="Search by name..." autocomplete="off" spellcheck="false">
     </div>
     <p id="scoresNote"></p>
+    <p id="goldenBootNote" style="color:var(--muted);font-family:var(--mono);font-size:0.78rem;margin-bottom:8px;"></p>
     <div class="table-scroll">
       <table class="assign">
         <thead>
@@ -1054,7 +1055,6 @@ const ASSIGNMENTS = {
   "Katie Cooper": {"tier_1":"Spain","tier_2":"Türkiye","tier_3":"Ghana","tier_4":"Iraq"},
   "Kim Patnaude": {"tier_1":"Brazil","tier_2":"Japan","tier_3":"Sweden","tier_4":"Iraq"},
   "Laure Claudon": {"tier_1":"Argentina","tier_2":"Morocco","tier_3":"Czechia","tier_4":"Haiti"},
-  "Lauren Carbone": {"tier_1":"France","tier_2":"Belgium","tier_3":"Canada","tier_4":"Qatar"},
   "Lillie Ratliff": {"tier_1":"Germany","tier_2":"Belgium","tier_3":"Czechia","tier_4":"Saudi Arabia"},
   "Lina Helgeson": {"tier_1":"France","tier_2":"Türkiye","tier_3":"Australia","tier_4":"Iran"},
   "Lindsay O'Gorman": {"tier_1":"Germany","tier_2":"Japan","tier_3":"Ivory Coast","tier_4":"Cape Verde"},
@@ -1161,7 +1161,7 @@ function isParticipantEliminated(r) {
 }
 function koPoints(ko) { return KO_PTS[ko] || 0; }
 function teamTotal(s) {
-  return s.gw*3 + s.gd + koPoints(s.ko) + (s.third==="won"?3:0) + (s.boot?5:0);
+  return s.gw*3 + s.gd + koPoints(s.ko) + (s.third==="won"?3:0);
 }
 
 let ROWS_BASE = [];
@@ -1446,11 +1446,24 @@ function setResultsOrder() {
 }
 
 function _applyScores(scores) {
+  const goldenBoot = scores["_goldenBoot"] || null;
+  delete scores["_goldenBoot"];
   SCORES = scores;
+
+  const bootNote = document.getElementById('goldenBootNote');
+  if (bootNote) {
+    if (goldenBoot) {
+      const prefix = goldenBoot.tied ? 'Current golden boot leaders (tied)' : 'Current golden boot leader';
+      bootNote.textContent = `${prefix}: ${goldenBoot.player} (${goldenBoot.team}, ${goldenBoot.goals} goals) — bonus pts not yet awarded`;
+    } else {
+      bootNote.textContent = '';
+    }
+  }
+
   ROWS_BASE = Object.keys(ASSIGNMENTS).map(name => {
     const a = ASSIGNMENTS[name];
     const teams = [a.tier_1, a.tier_2, a.tier_3, a.tier_4];
-    const sc = teams.map(t => SCORES[t] || {gw:0,gd:0,gl:0,gf:0,ga:0,ko:"",third:"",boot:false});
+    const sc = teams.map(t => SCORES[t] || {gw:0,gd:0,gl:0,gf:0,ga:0,ko:"",third:""});
     const totals = sc.map(teamTotal);
     const total = totals.reduce((s,v) => s+v, 0);
     return {
@@ -1519,7 +1532,6 @@ function breakdownHTML(r) {
     }
     if (s.third === "won")  lines += `<div class="bd-line"><span>3rd place win</span><span>+3 pts</span></div>`;
     if (s.third === "lost") lines += `<div class="bd-line"><span>3rd place loss</span><span>+0 pts</span></div>`;
-    if (s.boot) lines += `<div class="bd-line"><span>Golden Boot 👟</span><span>+5 pts</span></div>`;
     if (s.gf || s.ga) lines += `<div class="bd-line"><span>Goals for / against</span><span>${s.gf} / ${s.ga}</span></div>`;
     if (!lines) lines = `<div class="bd-line"><span>No results yet</span><span>—</span></div>`;
     return `<div class="bd-card t${tier}${isEliminated(team) ? ' team-out' : ''}">
@@ -1557,10 +1569,11 @@ function renderTable() {
   const sortingByTotal = sortKey === 'total' && !sortAsc;
   const rankMap = {};
   if (sortingByTotal) {
+    const allSorted = ROWS_BASE.slice().sort((a, b) => compareRows(a, b));
     let rank = 1;
-    for (let i = 0; i < rows.length; i++) {
-      if (i > 0 && compareRows(rows[i], rows[i-1]) !== 0) rank++;
-      rankMap[rows[i].name] = rank;
+    for (let i = 0; i < allSorted.length; i++) {
+      if (i > 0 && compareRows(allSorted[i], allSorted[i-1]) !== 0) rank++;
+      rankMap[allSorted[i].name] = rank;
     }
   }
 

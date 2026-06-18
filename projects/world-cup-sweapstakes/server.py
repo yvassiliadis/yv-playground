@@ -164,7 +164,6 @@ def _ensure_team(scores: dict, team: str) -> None:
             "ga": 0,
             "ko": "",
             "third": "",
-            "boot": False,
         }
 
 
@@ -450,16 +449,20 @@ def _build_scores(matches: list, scorers: list) -> dict:
                     scores[away]["gf"] += ag
                     scores[away]["ga"] += hg
 
-    # Golden boot — sole leader only
+    # Golden boot leader (note only — no points awarded yet)
     if scorers:
         top_goals = max((s.get("goals", 0) or 0 for s in scorers), default=0)
         if top_goals > 0:
             leaders = [s for s in scorers if (s.get("goals", 0) or 0) == top_goals]
-            if len(leaders) == 1:
-                team_raw = leaders[0].get("team", {}).get("name", "")
-                team = _normalize_name(team_raw)
-                if team in scores:
-                    scores[team]["boot"] = True
+            leader = leaders[0]
+            player_name = leader.get("player", {}).get("name", "")
+            team_raw = leader.get("team", {}).get("name", "")
+            scores["_goldenBoot"] = {
+                "player": player_name,
+                "team": _normalize_name(team_raw),
+                "goals": top_goals,
+                "tied": len(leaders) > 1,
+            }
 
     return scores
 
