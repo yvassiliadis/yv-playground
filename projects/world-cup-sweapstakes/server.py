@@ -99,7 +99,7 @@ _NAME_MAP: dict[str, str] = {
 }
 
 # Golden Boot points are awarded once the tournament is over (after the Final on Jul 19 2026)
-_GOLDEN_BOOT_AFTER = datetime(2026, 7, 20, tzinfo=timezone.utc)
+_GOLDEN_BOOT_AFTER = datetime(2026, 7, 19, tzinfo=timezone.utc)
 
 
 def _golden_boot_final() -> bool:
