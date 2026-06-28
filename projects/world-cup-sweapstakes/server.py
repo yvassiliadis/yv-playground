@@ -213,70 +213,14 @@ def _is_group_stage(stage: str) -> bool:
     return stage.startswith("GROUP_STAGE") or stage in _GROUP_STAGES
 
 
-def _group_qualifiers(matches: list) -> set[str]:
-    """Return teams confirmed as top-2 in their group (all 3 games played).
-
-    These teams are guaranteed R32 participants even before the API populates
-    their fixture slot with real team names.
-    """
-    records: dict[str, dict] = {}
-    groups: dict[str, list] = {}
-
-    for match in matches:
-        if not _is_group_stage(match.get("stage", "")):
-            continue
-        home_raw = match.get("homeTeam", {}).get("name", "")
-        away_raw = match.get("awayTeam", {}).get("name", "")
-        home = _normalize_name(home_raw)
-        away = _normalize_name(away_raw)
-        if home not in _KNOWN_TEAMS or away not in _KNOWN_TEAMS:
-            continue
-
-        group_field = match.get("group") or ""
-        if group_field.startswith("GROUP_"):
-            letter = group_field[len("GROUP_"):]
-        elif len(group_field) == 1 and group_field.isalpha():
-            letter = group_field.upper()
-        else:
-            continue
-
-        for team in (home, away):
-            if team not in records:
-                records[team] = {"played": 0, "pts": 0, "gd": 0, "gf": 0}
-                groups.setdefault(letter, [])
-                if team not in groups[letter]:
-                    groups[letter].append(team)
-
-        status = match.get("status", "")
-        ft = match.get("score", {}).get("fullTime", {})
-        hg, ag = ft.get("home"), ft.get("away")
-        if status == "FINISHED" and hg is not None and ag is not None:
-            records[home]["played"] += 1
-            records[away]["played"] += 1
-            records[home]["gf"] += hg
-            records[away]["gf"] += ag
-            records[home]["gd"] += hg - ag
-            records[away]["gd"] += ag - hg
-            if hg > ag:
-                records[home]["pts"] += 3
-            elif ag > hg:
-                records[away]["pts"] += 3
-            else:
-                records[home]["pts"] += 1
-                records[away]["pts"] += 1
-
-    qualifiers: set[str] = set()
-    for letter, members in groups.items():
-        if len(members) != 4:
-            continue
-        if not all(records[t]["played"] == 3 for t in members):
-            continue
-        sorted_members = sorted(
-            members,
-            key=lambda t: (-records[t]["pts"], -records[t]["gd"], -records[t]["gf"]),
-        )
-        qualifiers.update(sorted_members[:2])
-    return qualifiers
+def _zafronix_advanced_teams(standings: dict) -> set[str]:
+    """Return teams with advanced: true from Zafronix group standings."""
+    result: set[str] = set()
+    for group_teams in standings.get("groups", {}).values():
+        for entry in group_teams:
+            if entry.get("advanced"):
+                result.add(_normalize_name(entry.get("team", "")))
+    return result
 
 
 _ZAFRONIX_STAGE_TO_ROUND: dict[str, tuple[str, str]] = {
@@ -575,7 +519,7 @@ def _build_groups(matches: list) -> dict:
     return result
 
 
-def _build_scores(matches: list, scorers: list) -> dict:
+def _build_scores(matches: list, scorers: list, zafronix_standings: dict | None = None) -> dict:
     scores: dict = {}
 
     for match in matches:
@@ -677,9 +621,9 @@ def _build_scores(matches: list, scorers: list) -> dict:
                     scores[away]["gf"] += ag
                     scores[away]["ga"] += hg
 
-    # Credit confirmed group-stage qualifiers (top-2 finishers with all games played)
-    # before the API populates their R32 fixture with real team names.
-    for team in _group_qualifiers(matches):
+    # Credit confirmed group-stage qualifiers with their R32 advancement.
+    qualifiers = _zafronix_advanced_teams(zafronix_standings) if zafronix_standings else set()
+    for team in qualifiers:
         if team in scores:
             _set_ko(scores, team, "r32")
 
@@ -861,7 +805,8 @@ async def _fetch_scores() -> tuple[dict, list]:
 
     matches = matches_resp.json().get("matches", [])
     scorers = scorers_resp.json().get("scorers", [])
-    scores = _build_scores(matches, scorers)
+    zafronix = await _get_zafronix_data()
+    scores = _build_scores(matches, scorers, zafronix.get("standings"))
     return scores, matches
 
 
