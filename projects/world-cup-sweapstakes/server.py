@@ -279,17 +279,13 @@ def _group_qualifiers(matches: list) -> set[str]:
     return qualifiers
 
 
-_BRACKET_ROUNDS = [
-    {"id": "r32",   "label": "Round of 32",    "stages": ["LAST_32"]},
-    {"id": "r16",   "label": "Round of 16",    "stages": ["LAST_16"]},
-    {"id": "qf",    "label": "Quarter-finals", "stages": ["QUARTER_FINALS"]},
-    {"id": "sf",    "label": "Semi-finals",    "stages": ["SEMI_FINALS"]},
-    {"id": "final", "label": "Final",          "stages": ["FINAL", "THIRD_PLACE"]},
-]
-
-_MATCH_LABEL = {
-    "FINAL":       "Final",
-    "THIRD_PLACE": "3rd Place",
+_ZAFRONIX_STAGE_TO_ROUND: dict[str, tuple[str, str]] = {
+    "round_of_32":   ("r32",   "Round of 32"),
+    "round_of_16":   ("r16",   "Round of 16"),
+    "quarter_final": ("qf",    "Quarter-finals"),
+    "semi_final":    ("sf",    "Semi-finals"),
+    "third_place":   ("final", "3rd Place"),
+    "final":         ("final", "Final"),
 }
 
 
@@ -328,54 +324,111 @@ def _fmt_date_range(utc_dates: list[str]) -> str:
         return f"{lo.strftime('%b')} {lo.day} – {hi.strftime('%b')} {hi.day}"
 
 
-def _build_bracket(matches: list) -> dict:
-    # Collect matches per stage
-    by_stage: dict[str, list] = {}
-    for match in matches:
-        stage = match.get("stage", "")
-        if not any(stage in r["stages"] for r in _BRACKET_ROUNDS):
-            continue
-        by_stage.setdefault(stage, []).append(match)
+def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
+    """Build bracket from Zafronix structure overlaid with fd live scores."""
+    if not zafronix_bracket:
+        return {"rounds": []}
 
-    result = []
-    for round_def in _BRACKET_ROUNDS:
+    # Build fd lookup by normalised team pair (KO matches only)
+    fd_by_teams: dict[tuple[str, str], dict] = {}
+    for m in fd_matches:
+        h = _normalize_name(m.get("homeTeam", {}).get("name", ""))
+        a = _normalize_name(m.get("awayTeam", {}).get("name", ""))
+        stage = m.get("stage", "")
+        if h and a and not _is_group_stage(stage):
+            fd_by_teams[(h, a)] = m
+
+    stages_data = zafronix_bracket.get("stages", {})
+
+    # Process stages in order; third_place and final share the "final" round id
+    stage_order = [
+        "round_of_32",
+        "round_of_16",
+        "quarter_final",
+        "semi_final",
+        ("third_place", "final"),  # combined into one output round
+    ]
+
+    result: list[dict] = []
+
+    for stage_entry in stage_order:
+        if isinstance(stage_entry, tuple):
+            # Combined round: third_place + final
+            z_stages = list(stage_entry)
+            round_id = "final"
+            round_label = "Final"
+        else:
+            z_stages = [stage_entry]
+            round_id, round_label = _ZAFRONIX_STAGE_TO_ROUND[stage_entry]
+
         round_matches: list[dict] = []
         utc_dates: list[str] = []
 
-        for stage in round_def["stages"]:
-            stage_matches = by_stage.get(stage, [])
-            stage_matches = sorted(stage_matches, key=lambda m: m.get("id") or 0)
-            match_label = _MATCH_LABEL.get(stage)
+        for z_stage in z_stages:
+            stage_matches = stages_data.get(z_stage, [])
+            stage_matches = sorted(stage_matches, key=lambda m: m.get("matchNo") or 0)
 
-            for match in stage_matches:
-                home_raw = match.get("homeTeam", {}).get("name", "")
-                away_raw = match.get("awayTeam", {}).get("name", "")
-                home = _normalize_name(home_raw)
-                away = _normalize_name(away_raw)
+            for zm in stage_matches:
+                # Apply corrections
+                match_id = zm.get("matchId", "")
+                correction = _ZAFRONIX_CORRECTIONS.get(match_id, {})
+                home = correction.get("home", zm.get("home"))
+                away = correction.get("away", zm.get("away"))
 
-                score_data = match.get("score", {})
-                full_time = score_data.get("fullTime", {})
+                # Treat unknown teams as None
+                if home is not None and home not in _KNOWN_TEAMS:
+                    home = None
+                if away is not None and away not in _KNOWN_TEAMS:
+                    away = None
 
-                utc_date = match.get("utcDate")
-                if utc_date:
-                    utc_dates.append(utc_date)
+                # Look up fd match (only possible when both teams are known)
+                fd_match = None
+                if home is not None and away is not None:
+                    fd_match = fd_by_teams.get((home, away))
+
+                # Score and status
+                if fd_match is not None:
+                    hg, ag = _live_score(fd_match.get("score", {}))
+                    status = fd_match.get("status", "SCHEDULED")
+                    minute = fd_match.get("minute")
+                    duration = fd_match.get("score", {}).get("duration")
+                else:
+                    hg = zm.get("homeScore")
+                    ag = zm.get("awayScore")
+                    status = "SCHEDULED"
+                    minute = None
+                    duration = None
+
+                # Determine match label
+                if z_stage == "final":
+                    match_label = "Final"
+                elif z_stage == "third_place":
+                    match_label = "3rd Place"
+                else:
+                    match_label = None
+
+                kickoff = zm.get("kickoffUtc")
+                if kickoff:
+                    utc_dates.append(kickoff)
 
                 round_matches.append({
-                    "home":      home if home in _KNOWN_TEAMS else None,
-                    "away":      away if away in _KNOWN_TEAMS else None,
-                    "homeScore": full_time.get("home"),
-                    "awayScore": full_time.get("away"),
-                    "status":    match.get("status", ""),
-                    "utcDate":   utc_date,
+                    "home":      home,
+                    "away":      away,
+                    "homeScore": hg,
+                    "awayScore": ag,
+                    "status":    status,
+                    "utcDate":   kickoff,
                     "label":     match_label,
-                    "minute":    match.get("minute"),
-                    "duration":  score_data.get("duration"),
+                    "minute":    minute,
+                    "duration":  duration,
+                    "stadium":   zm.get("stadium"),
+                    "city":      zm.get("city"),
                 })
 
         if round_matches:
             result.append({
-                "id":      round_def["id"],
-                "label":   round_def["label"],
+                "id":      round_id,
+                "label":   round_label,
                 "dates":   _fmt_date_range(utc_dates),
                 "matches": round_matches,
             })
@@ -690,10 +743,11 @@ async def _poll_loop() -> None:
             _cache.scores = scores
             _cache.matches = matches
             _cache.fetched_at = datetime.now(tz=timezone.utc)
+            zafronix = await _get_zafronix_data()
             payload = {
                 "scores":  scores,
                 "groups":  _build_groups(matches),
-                "bracket": _build_bracket(matches),
+                "bracket": _build_bracket(zafronix["bracket"], matches),
             }
             await _broadcast(payload)
             log.info("Live update broadcast to %d subscriber(s)", len(_subscribers))
@@ -892,7 +946,8 @@ async def get_bracket() -> dict:
             _cache.matches = matches
             _cache.fetched_at = datetime.now(tz=timezone.utc)
 
-    return _build_bracket(_cache.matches)  # type: ignore[arg-type]
+    zafronix = await _get_zafronix_data()
+    return _build_bracket(zafronix["bracket"], _cache.matches or [])  # type: ignore[arg-type]
 
 
 @app.get("/api/live")
@@ -908,10 +963,11 @@ async def live_updates() -> StreamingResponse:
                 _cache.scores = scores
                 _cache.matches = matches
                 _cache.fetched_at = now
+        zafronix = await _get_zafronix_data()
         initial = {
             "scores":  _cache.scores,
             "groups":  _build_groups(_cache.matches),
-            "bracket": _build_bracket(_cache.matches),
+            "bracket": _build_bracket(zafronix["bracket"], _cache.matches or []),
         }
     except Exception as exc:
         log.warning("Initial fetch on SSE connect failed: %s", exc)
