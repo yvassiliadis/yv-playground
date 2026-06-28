@@ -24,7 +24,7 @@ def test_load_facts_adds_month_day_to_every_fact():
 def test_partition_splits_dated_and_undated():
     facts = trivia.load_facts()
     dated, undated = trivia.partition_facts(facts)
-    assert len(dated) == 21
-    assert len(undated) == 77
+    assert len(dated) == 19
+    assert len(undated) == 79
     assert all(f["monthDay"] for f in dated)
     assert all(f["monthDay"] is None for f in undated)

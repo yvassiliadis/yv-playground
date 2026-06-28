@@ -18,8 +18,8 @@ _MONTHS = [
     "July", "August", "September", "October", "November", "December",
 ]
 _MIDX = {name: i + 1 for i, name in enumerate(_MONTHS)}
-_DAY_MONTH = re.compile(r"(\d{1,2})\s+(" + "|".join(_MONTHS) + r")")
-_MONTH_DAY = re.compile(r"(" + "|".join(_MONTHS) + r")\s+(\d{1,2})")
+_DAY_MONTH = re.compile(r"(?<!\d)(\d{1,2})\s+(" + "|".join(_MONTHS) + r")")
+_MONTH_DAY = re.compile(r"(" + "|".join(_MONTHS) + r")\s+(\d{1,2})(?!\d)")
 
 
 def _month_day(text: str) -> str | None:
