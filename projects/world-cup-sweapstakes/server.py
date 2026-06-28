@@ -370,10 +370,13 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
 
             for zm in stage_matches:
                 # Apply corrections
-                match_id = zm.get("matchId", "")
-                correction = _ZAFRONIX_CORRECTIONS.get(match_id, {})
-                home = correction.get("home", zm.get("home"))
-                away = correction.get("away", zm.get("away"))
+                match_id = zm.get("matchId")
+                home = zm.get("home")
+                away = zm.get("away")
+                if match_id and match_id in _ZAFRONIX_CORRECTIONS:
+                    correction = _ZAFRONIX_CORRECTIONS[match_id]
+                    home = correction.get("home", home)
+                    away = correction.get("away", away)
 
                 # Treat unknown teams as None
                 if home is not None and home not in _KNOWN_TEAMS:
@@ -384,7 +387,7 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
                 # Look up fd match (only possible when both teams are known)
                 fd_match = None
                 if home is not None and away is not None:
-                    fd_match = fd_by_teams.get((home, away))
+                    fd_match = fd_by_teams.get((home, away)) or fd_by_teams.get((away, home))
 
                 # Score and status
                 if fd_match is not None:
@@ -395,7 +398,12 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
                 else:
                     hg = zm.get("homeScore")
                     ag = zm.get("awayScore")
-                    status = "SCHEDULED"
+                    # Infer status from Zafronix when fd is unavailable
+                    if hg is not None and ag is not None:
+                        fallback_status = "FINISHED"
+                    else:
+                        fallback_status = "SCHEDULED"
+                    status = fallback_status
                     minute = None
                     duration = None
 
@@ -809,16 +817,17 @@ async def _get_zafronix_data() -> dict:
         )
 
         if _cache.zafronix_bracket is None:
-            # Cold start: fetch regardless of window
-            try:
-                bracket, standings = await _fetch_zafronix_data()
-                _cache.zafronix_bracket = bracket
-                _cache.zafronix_standings = standings
-                _cache.zafronix_fetched_at = now
-                log.info("Zafronix cold-start fetch complete")
-            except Exception as exc:
-                log.warning("Zafronix cold-start fetch failed: %s", exc)
-                _cache.zafronix_fetched_at = now
+            # Cold start: only attempt if no prior attempt, or last attempt was >60s ago
+            if _cache.zafronix_fetched_at is None or cache_age > 60:
+                try:
+                    bracket, standings = await _fetch_zafronix_data()
+                    _cache.zafronix_bracket = bracket
+                    _cache.zafronix_standings = standings
+                    _cache.zafronix_fetched_at = now
+                    log.info("Zafronix cold-start fetch complete")
+                except Exception as exc:
+                    log.warning("Zafronix cold-start fetch failed: %s", exc)
+                    _cache.zafronix_fetched_at = now  # gate retries
         elif cache_age > 3600 and _in_zafronix_fetch_window(now):
             # Cache expired and in fetch window: refresh
             try:
