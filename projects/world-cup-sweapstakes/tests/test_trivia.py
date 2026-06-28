@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 
 import trivia
@@ -62,3 +63,25 @@ def test_on_this_day_from_file_empty_when_no_match():
     dated, _ = trivia.partition_facts(trivia.load_facts())
     # Jan 1 has no dated fact in the curated set
     assert trivia.on_this_day_from_file(dated, date(2026, 1, 1)) == []
+
+
+def test_phrase_match_formats_result_with_endash():
+    m = {
+        "homeTeam": "Sweden", "awayTeam": "Italy", "score": "3-2",
+        "stage": "group_3", "city": "São Paulo",
+    }
+    assert trivia.phrase_match(m) == "Sweden 3–2 Italy (group 3, São Paulo)"
+
+
+def test_select_on_this_day_prefers_file_and_skips_api():
+    dated, _ = trivia.partition_facts(trivia.load_facts())
+    # api_key intentionally bogus; file match for 06-27 means API is never called
+    hits = asyncio.run(trivia.select_on_this_day(dated, date(2026, 6, 27), "bogus"))
+    assert len(hits) == 1
+    assert "Battle of Bern" in hits[0]["fact"]
+
+
+def test_select_on_this_day_no_key_no_file_returns_empty():
+    dated, _ = trivia.partition_facts(trivia.load_facts())
+    hits = asyncio.run(trivia.select_on_this_day(dated, date(2026, 1, 1), ""))
+    assert hits == []

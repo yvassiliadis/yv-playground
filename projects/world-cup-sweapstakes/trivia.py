@@ -59,3 +59,46 @@ def on_this_day_from_file(dated: list[dict], today: date) -> list[dict]:
         key=lambda f: f["year"],
     )
     return [{"year": f["year"], "fact": f["fact"]} for f in hits[:3]]
+
+
+def phrase_match(m: dict) -> str:
+    home = m.get("homeTeam", "?")
+    away = m.get("awayTeam", "?")
+    score = (m.get("score") or "").replace("-", "–")
+    stage = (m.get("stage") or "").replace("_", " ")
+    city = m.get("city")
+    bits = ", ".join(b for b in (stage, city) if b)
+    detail = f" ({bits})" if bits else ""
+    return f"{home} {score} {away}{detail}".strip()
+
+
+async def on_this_day_from_api(today: date, api_key: str) -> list[dict]:
+    url = f"{ZAFRONIX_BASE}/on-this-day"
+    headers = {"X-API-Key": api_key}
+    params = {"date": today.strftime("%m-%d")}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=headers, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+    facts = data.get("facts") or []
+    if facts:
+        return [{"year": f.get("year"), "fact": f.get("fact", "")} for f in facts[:3]]
+    matches = sorted(
+        data.get("matches") or [],
+        key=lambda m: m.get("year", 0),
+        reverse=True,
+    )[:3]
+    return [{"year": m.get("year"), "fact": phrase_match(m)} for m in matches]
+
+
+async def select_on_this_day(dated: list[dict], today: date, api_key: str) -> list[dict]:
+    file_hits = on_this_day_from_file(dated, today)
+    if file_hits:
+        return file_hits
+    if not api_key:
+        return []
+    try:
+        return await on_this_day_from_api(today, api_key)
+    except Exception as exc:
+        log.warning("on-this-day API failed: %s", exc)
+        return []
