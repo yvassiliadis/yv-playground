@@ -743,6 +743,11 @@
   /* ---------- Bracket ---------- */
   .section-sep{border:none;border-top:1px solid var(--border-soft);margin:56px 0 44px;}
   .bracket-first #bracketSection .section-sep{margin-top:0;}
+  .groups-head { display: flex; align-items: center; gap: 14px; cursor: pointer; user-select: none; }
+  .groups-chevron { font-size: 1.1rem; color: var(--muted); transition: transform .2s ease; }
+  #groupsSection.open .groups-chevron { transform: rotate(180deg); }
+  .groups-body { display: none; margin-top: 24px; }
+  #groupsSection.open .groups-body { display: block; }
   .bracket-outer{position:relative;overflow-x:auto;}
   .bracket-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
   .bracket-grid{display:flex;gap:24px;align-items:flex-start;min-width:950px;}
@@ -843,11 +848,17 @@
     <h2 class="head">Results</h2>
     <div class="results-sections" id="resultsSections">
       <div class="results-section" id="groupsSection">
-        <div class="groups-legend">
-          <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
-          <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+        <div class="groups-head" id="groupsHead" role="button" tabindex="0" aria-expanded="false">
+          <h2 class="head">Group Stage Results</h2>
+          <span class="groups-chevron" aria-hidden="true">▾</span>
         </div>
-        <div class="groups-grid" id="groupsGrid"></div>
+        <div class="groups-body">
+          <div class="groups-legend">
+            <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
+            <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+          </div>
+          <div class="groups-grid" id="groupsGrid"></div>
+        </div>
       </div>
       <div class="results-section" id="bracketSection">
         <hr class="section-sep">
@@ -1127,6 +1138,16 @@ tabBtns.forEach(btn => {
     if (tab === 'results')  { initGroups(); initBracket(); setResultsOrder(); }
     if (tab === 'schedule') { initSchedule(); }
   });
+});
+
+const groupsHead = document.getElementById('groupsHead');
+function toggleGroups() {
+  const open = document.getElementById('groupsSection').classList.toggle('open');
+  groupsHead.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+groupsHead.addEventListener('click', toggleGroups);
+groupsHead.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroups(); }
 });
 
 /* ============ TAB 3: RANKINGS ============ */
