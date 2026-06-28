@@ -119,3 +119,20 @@ def test_compose_message_second_otd_uses_also_in():
     msg = trivia.compose_message([{"id": "x", "fact": "F."}], otd, now)
     assert "🗓️ *On this exact day, 1958:* First." in msg
     assert "🗓️ *Also in 1986:* Second." in msg
+
+
+def test_build_daily_post_june_27_contains_known_picks():
+    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
+    msg = asyncio.run(trivia.build_daily_post(now, ""))
+    # most-goals-per-match (1954) is the deterministic DYK pick; Battle of Bern is the file on-this-day
+    assert "5.38" in msg
+    assert "Battle of Bern" in msg
+    assert "minutes until the 2026 World Cup Final" in msg
+
+
+def test_build_daily_post_thin_day_has_two_did_you_knows():
+    # Jan 1: no on-this-day fact and no api key -> fall back to 2 did-you-knows
+    now = datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc)
+    msg = asyncio.run(trivia.build_daily_post(now, ""))
+    assert msg.count("💡 *Did you know?*") == 2
+    assert "🗓️" not in msg

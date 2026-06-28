@@ -122,3 +122,18 @@ def compose_message(dyk: list[dict], otd: list[dict], now: datetime) -> str:
     mins = minutes_to_final(now)
     lines.append(f"⏱️ *{mins:,} minutes until the 2026 World Cup Final*")
     return "\n".join(lines)
+
+
+async def build_daily_post(now: datetime, api_key: str) -> str:
+    dated, undated = partition_facts(load_facts())
+    today = now.date()
+    otd = await select_on_this_day(dated, today, api_key)
+    dyk = did_you_know(undated, today, count=1 if otd else 2)
+    return compose_message(dyk, otd, now)
+
+
+async def post_to_slack(message: str, webhook_url: str) -> bool:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(webhook_url, json={"text": message})
+    resp.raise_for_status()
+    return True
