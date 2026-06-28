@@ -117,6 +117,8 @@ _NAME_MAP: dict[str, str] = {
 _ZAFRONIX_CORRECTIONS: dict[str, dict] = {
     "2026-074": {"home": "Germany", "away": "Paraguay"},
     "2026-077": {"home": "France", "away": "Sweden"},
+    "2026-082": {"home": "Belgium", "away": "Senegal"},
+    "2026-085": {"home": "Switzerland", "away": "Algeria"},
 }
 # Applied in _build_bracket() when consuming bracket stage data.
 
@@ -272,6 +274,55 @@ def _fmt_date_range(utc_dates: list[str]) -> str:
         return f"{lo.strftime('%b')} {lo.day} – {hi.strftime('%b')} {hi.day}"
 
 
+def _bracket_order_key(stages_data: dict) -> dict:
+    """Map matchNo -> display position, threading rounds via homeRef/awayRef.
+
+    Each knockout match references its feeders ("W74"); rooting at the final
+    and ordering every round by its leftmost feeding leaf lays the rounds out
+    as a consistent bracket tree (feeders of one match sit adjacent in the
+    previous round). Returns {} when the tree can't be resolved, so callers
+    fall back to matchNo order.
+    """
+    by_no: dict = {}
+    for matches in stages_data.values():
+        for m in matches:
+            no = m.get("matchNo")
+            if no is not None:
+                by_no[no] = m
+
+    def feeder(ref):
+        if isinstance(ref, str) and ref.startswith("W"):
+            try:
+                return by_no.get(int(ref[1:]))
+            except ValueError:
+                return None
+        return None
+
+    def leaf_order(m):
+        home_feeder = feeder(m.get("homeRef"))
+        away_feeder = feeder(m.get("awayRef"))
+        if home_feeder is None and away_feeder is None:
+            return [m.get("matchNo")]
+        home_leaves = leaf_order(home_feeder) if home_feeder else [m.get("matchNo")]
+        away_leaves = leaf_order(away_feeder) if away_feeder else [m.get("matchNo")]
+        return home_leaves + away_leaves
+
+    final = (stages_data.get("final") or [None])[0]
+    if not final:
+        return {}
+    leaf_idx = {no: i for i, no in enumerate(leaf_order(final))}
+
+    def leftmost(m):
+        home_feeder = feeder(m.get("homeRef"))
+        return leftmost(home_feeder) if home_feeder else leaf_idx.get(m.get("matchNo"), 1_000_000)
+
+    return {
+        m.get("matchNo"): leftmost(m)
+        for matches in stages_data.values()
+        for m in matches
+    }
+
+
 def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
     """Build bracket from Zafronix structure overlaid with fd live scores."""
     if not zafronix_bracket:
@@ -287,6 +338,7 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
             fd_by_teams[(h, a)] = m
 
     stages_data = zafronix_bracket.get("stages", {})
+    order_key = _bracket_order_key(stages_data)
 
     # Process stages in order; third_place and final share the "final" round id
     stage_order = [
@@ -314,7 +366,10 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
 
         for z_stage in z_stages:
             stage_matches = stages_data.get(z_stage, [])
-            stage_matches = sorted(stage_matches, key=lambda m: m.get("matchNo") or 0)
+            stage_matches = sorted(
+                stage_matches,
+                key=lambda m: order_key.get(m.get("matchNo"), m.get("matchNo") or 0),
+            )
 
             for zm in stage_matches:
                 # Apply corrections
