@@ -114,6 +114,7 @@ _ZAFRONIX_CORRECTIONS: dict[str, dict] = {
     "2026-074": {"home": "Germany", "away": "Paraguay"},
     "2026-077": {"home": "France", "away": "Sweden"},
 }
+# Applied in _build_bracket() when consuming bracket stage data.
 
 # Golden Boot points are awarded once the tournament is over (after the Final on Jul 19 2026)
 _GOLDEN_BOOT_AFTER = datetime(2026, 7, 19, tzinfo=timezone.utc)
@@ -171,9 +172,9 @@ _ZAFRONIX_QUIET_START_UTC = 7
 _ZAFRONIX_QUIET_END_UTC = 16
 
 
-def _in_zafronix_fetch_window() -> bool:
+def _in_zafronix_fetch_window(dt: datetime | None = None) -> bool:
     """Return True when it is appropriate to make new Zafronix requests."""
-    hour = datetime.now(tz=timezone.utc).hour
+    hour = (dt or datetime.now(tz=timezone.utc)).hour
     return not (_ZAFRONIX_QUIET_START_UTC <= hour < _ZAFRONIX_QUIET_END_UTC)
 
 
@@ -763,7 +764,8 @@ async def _get_zafronix_data() -> dict:
                 log.info("Zafronix cold-start fetch complete")
             except Exception as exc:
                 log.warning("Zafronix cold-start fetch failed: %s", exc)
-        elif cache_age > 3600 and _in_zafronix_fetch_window():
+                _cache.zafronix_fetched_at = now
+        elif cache_age > 3600 and _in_zafronix_fetch_window(now):
             # Cache expired and in fetch window: refresh
             try:
                 bracket, standings = await _fetch_zafronix_data()
