@@ -743,6 +743,11 @@
   /* ---------- Bracket ---------- */
   .section-sep{border:none;border-top:1px solid var(--border-soft);margin:56px 0 44px;}
   .bracket-first #bracketSection .section-sep{margin-top:0;}
+  .groups-head { display: flex; align-items: center; gap: 14px; cursor: pointer; user-select: none; }
+  .groups-chevron { font-size: 1.1rem; color: var(--muted); transition: transform .2s ease; }
+  #groupsSection.open .groups-chevron { transform: rotate(180deg); }
+  .groups-body { display: none; margin-top: 24px; }
+  #groupsSection.open .groups-body { display: block; }
   .bracket-outer{position:relative;overflow-x:auto;}
   .bracket-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
   .bracket-grid{display:flex;gap:24px;align-items:flex-start;min-width:950px;}
@@ -843,11 +848,17 @@
     <h2 class="head">Results</h2>
     <div class="results-sections" id="resultsSections">
       <div class="results-section" id="groupsSection">
-        <div class="groups-legend">
-          <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
-          <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+        <div class="groups-head" id="groupsHead" role="button" tabindex="0" aria-expanded="false">
+          <h2 class="head">Group Stage Results</h2>
+          <span class="groups-chevron" aria-hidden="true">▾</span>
         </div>
-        <div class="groups-grid" id="groupsGrid"></div>
+        <div class="groups-body">
+          <div class="groups-legend">
+            <div class="leg-item"><div class="leg-adv"></div>Advancing (top 2)</div>
+            <div class="leg-item"><div class="leg-maybe"></div>3rd place (best 8 advance)</div>
+          </div>
+          <div class="groups-grid" id="groupsGrid"></div>
+        </div>
       </div>
       <div class="results-section" id="bracketSection">
         <hr class="section-sep">
@@ -1129,6 +1140,16 @@ tabBtns.forEach(btn => {
   });
 });
 
+const groupsHead = document.getElementById('groupsHead');
+function toggleGroups() {
+  const open = document.getElementById('groupsSection').classList.toggle('open');
+  groupsHead.setAttribute('aria-expanded', open);
+}
+groupsHead.addEventListener('click', toggleGroups);
+groupsHead.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroups(); }
+});
+
 /* ============ TAB 3: RANKINGS ============ */
 const assignBody = document.getElementById('assignBody');
 const tableFilter = document.getElementById('tableFilter');
@@ -1168,6 +1189,10 @@ let ROWS_BASE = [];
 
 /* ============ TAB: GROUPS ============ */
 let groupsLoaded = false;
+let groupsData = null;
+// Teams that reached the knockouts, derived from the bracket's R32 round.
+// Empty until the bracket is populated (i.e. during the group stage).
+let advancedTeams = new Set();
 
 function fmtDt(isoStr) {
   const d = new Date(isoStr);
@@ -1204,8 +1229,14 @@ function buildGroupCard(letter, group) {
   group.standings.forEach((s, i) => {
     const gd = s.played > 0 ? (s.gd > 0 ? `+${s.gd}` : `${s.gd}`) : '–';
     const tr = document.createElement('tr');
-    if (i < 2 && anyPlayed) tr.className = 'adv';
-    else if (i === 2 && anyPlayed) tr.className = 'maybe';
+    if (advancedTeams.size) {
+      // Knockouts are set: highlight teams that advanced, grey out the rest.
+      if (advancedTeams.has(s.name)) tr.className = 'adv';
+    } else if (anyPlayed) {
+      // Group stage: hint at likely qualifiers by standing position.
+      if (i < 2) tr.className = 'adv';
+      else if (i === 2) tr.className = 'maybe';
+    }
     tr.innerHTML = `
       <td><div class="g-team-cell">
         <span>${flag(s.name)}</span>
@@ -1255,6 +1286,7 @@ function buildGroupCard(letter, group) {
 
 function _applyGroups(data) {
   groupsLoaded = true;
+  groupsData = data;
   const grid = document.getElementById('groupsGrid');
   grid.innerHTML = '';
   for (const [letter, group] of Object.entries(data)) {
@@ -1421,6 +1453,22 @@ function _applyBracket(data) {
       col.appendChild(matchList);
       grid.appendChild(col);
     });
+  const hadAdvanced = advancedTeams.size > 0;
+  const r32 = data.rounds.find(r => r.id === 'r32');
+  advancedTeams = new Set();
+  if (r32) {
+    r32.matches.forEach(m => {
+      if (m.home) advancedTeams.add(m.home);
+      if (m.away) advancedTeams.add(m.away);
+    });
+  }
+  // Only re-grey already-rendered groups the first time we learn who advanced
+  // (the initial load race). On later updates the groups render already sees
+  // advancedTeams, so the SSE handler's own _applyGroups call suffices.
+  if (!hadAdvanced && advancedTeams.size && groupsLoaded && groupsData) {
+    _applyGroups(groupsData);
+  }
+
   requestAnimationFrame(drawBracketLines);
   document.fonts.ready.then(drawBracketLines);
 }
