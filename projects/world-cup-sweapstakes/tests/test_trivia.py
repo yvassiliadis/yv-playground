@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone
 
 import trivia
 
@@ -85,3 +85,37 @@ def test_select_on_this_day_no_key_no_file_returns_empty():
     dated, _ = trivia.partition_facts(trivia.load_facts())
     hits = asyncio.run(trivia.select_on_this_day(dated, date(2026, 1, 1), ""))
     assert hits == []
+
+
+def test_minutes_to_final_known_value():
+    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
+    assert trivia.minutes_to_final(now) == 31980
+
+
+def test_minutes_to_final_clamps_to_zero_after_final():
+    now = datetime(2026, 8, 1, 0, 0, tzinfo=timezone.utc)
+    assert trivia.minutes_to_final(now) == 0
+
+
+def test_compose_message_has_all_sections_in_order():
+    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
+    dyk = [{"id": "x", "fact": "Fact one."}]
+    otd = [{"year": 1954, "fact": "Battle of Bern stuff."}]
+    msg = trivia.compose_message(dyk, otd, now)
+    assert msg.startswith("*⚽ Scope3 World Cup — Did You Know?*")
+    assert "💡 *Did you know?* Fact one." in msg
+    assert "🗓️ *On this exact day, 1954:* Battle of Bern stuff." in msg
+    assert "31,980 minutes until the 2026 World Cup Final" in msg
+    # countdown is the last line
+    assert msg.strip().splitlines()[-1].startswith("⏱️")
+
+
+def test_compose_message_second_otd_uses_also_in():
+    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
+    otd = [
+        {"year": 1958, "fact": "First."},
+        {"year": 1986, "fact": "Second."},
+    ]
+    msg = trivia.compose_message([{"id": "x", "fact": "F."}], otd, now)
+    assert "🗓️ *On this exact day, 1958:* First." in msg
+    assert "🗓️ *Also in 1986:* Second." in msg

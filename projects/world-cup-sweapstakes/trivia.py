@@ -102,3 +102,23 @@ async def select_on_this_day(dated: list[dict], today: date, api_key: str) -> li
     except Exception as exc:
         log.warning("on-this-day API failed: %s", exc)
         return []
+
+
+def minutes_to_final(now: datetime) -> int:
+    return max(0, int((FINAL_UTC - now).total_seconds() // 60))
+
+
+def compose_message(dyk: list[dict], otd: list[dict], now: datetime) -> str:
+    lines = ["*⚽ Scope3 World Cup — Did You Know?*", ""]
+    for fact in dyk:
+        lines.append(f"💡 *Did you know?* {fact['fact']}")
+        lines.append("")
+    for i, item in enumerate(otd):
+        if i == 0:
+            lines.append(f"🗓️ *On this exact day, {item['year']}:* {item['fact']}")
+        else:
+            lines.append(f"🗓️ *Also in {item['year']}:* {item['fact']}")
+        lines.append("")
+    mins = minutes_to_final(now)
+    lines.append(f"⏱️ *{mins:,} minutes until the 2026 World Cup Final*")
+    return "\n".join(lines)
