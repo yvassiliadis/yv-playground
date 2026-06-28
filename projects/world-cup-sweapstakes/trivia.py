@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import re
@@ -43,3 +44,18 @@ def partition_facts(facts: list[dict]) -> tuple[list[dict], list[dict]]:
     dated = [f for f in facts if f["monthDay"]]
     undated = [f for f in facts if not f["monthDay"]]
     return dated, undated
+
+
+def did_you_know(undated: list[dict], today: date, count: int = 1) -> list[dict]:
+    ordered = sorted(undated, key=lambda f: hashlib.md5(f["id"].encode()).hexdigest())
+    start = (today - ANCHOR).days % len(ordered)
+    return [ordered[(start + i) % len(ordered)] for i in range(count)]
+
+
+def on_this_day_from_file(dated: list[dict], today: date) -> list[dict]:
+    key = today.strftime("%m-%d")
+    hits = sorted(
+        (f for f in dated if f["monthDay"] == key),
+        key=lambda f: f["year"],
+    )
+    return [{"year": f["year"], "fact": f["fact"]} for f in hits[:3]]
