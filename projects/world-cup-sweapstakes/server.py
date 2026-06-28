@@ -32,13 +32,12 @@ if not FOOTBALL_DATA_API_KEY:
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
 
 ZAFRONIX_WC_API_KEY = os.environ.get("ZAFRONIX_WC_API_KEY", "")
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
-TRIVIA_TRIGGER_TOKEN = os.environ.get("TRIVIA_TRIGGER_TOKEN", "")
-
-ZAFRONIX_API_KEY = os.environ.get("ZAFRONIX_WC_API_KEY", "")
-if not ZAFRONIX_API_KEY:
+if not ZAFRONIX_WC_API_KEY:
     logging.warning("ZAFRONIX_WC_API_KEY is not set — Zafronix endpoints will fail")
 ZAFRONIX_BASE = "https://api.zafronix.com/fifa/worldcup/v1"
+
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+TRIVIA_TRIGGER_TOKEN = os.environ.get("TRIVIA_TRIGGER_TOKEN", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -747,7 +746,7 @@ def _needs_refresh(matches: list) -> bool:
 
 async def _fetch_zafronix_data() -> tuple[dict, dict]:
     """Fetch bracket and standings from Zafronix. Returns (bracket, standings)."""
-    headers = {"X-API-Key": ZAFRONIX_API_KEY}
+    headers = {"X-API-Key": ZAFRONIX_WC_API_KEY}
     async with httpx.AsyncClient(timeout=15.0) as client:
         bracket_resp, standings_resp = await asyncio.gather(
             client.get(f"{ZAFRONIX_BASE}/bracket", params={"year": 2026}, headers=headers),
