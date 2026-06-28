@@ -218,8 +218,8 @@ def _zafronix_advanced_teams(standings: dict) -> set[str]:
     result: set[str] = set()
     for group_teams in standings.get("groups", {}).values():
         for entry in group_teams:
-            if entry.get("advanced"):
-                result.add(_normalize_name(entry.get("team", "")))
+            if entry.get("advanced") and entry.get("team"):
+                result.add(_normalize_name(entry["team"]))
     return result
 
 
@@ -622,7 +622,7 @@ def _build_scores(matches: list, scorers: list, zafronix_standings: dict | None 
                     scores[away]["ga"] += hg
 
     # Credit confirmed group-stage qualifiers with their R32 advancement.
-    qualifiers = _zafronix_advanced_teams(zafronix_standings) if zafronix_standings else set()
+    qualifiers = _zafronix_advanced_teams(zafronix_standings) if zafronix_standings is not None else set()
     for team in qualifiers:
         if team in scores:
             _set_ko(scores, team, "r32")
@@ -691,11 +691,11 @@ async def _poll_loop() -> None:
         if not _in_match_window(_cache.matches or []):
             continue
         try:
-            scores, matches = await _fetch_scores()
+            zafronix = await _get_zafronix_data()
+            scores, matches = await _fetch_scores(zafronix_standings=zafronix.get("standings"))
             _cache.scores = scores
             _cache.matches = matches
             _cache.fetched_at = datetime.now(tz=timezone.utc)
-            zafronix = await _get_zafronix_data()
             payload = {
                 "scores":  scores,
                 "groups":  _build_groups(matches),
@@ -789,7 +789,7 @@ async def _get_zafronix_data() -> dict:
         }
 
 
-async def _fetch_scores() -> tuple[dict, list]:
+async def _fetch_scores(zafronix_standings: dict | None = None) -> tuple[dict, list]:
     headers = {"X-Auth-Token": FOOTBALL_DATA_API_KEY}
     async with httpx.AsyncClient(timeout=15.0) as client:
         matches_resp, scorers_resp = await asyncio.gather(
@@ -805,8 +805,10 @@ async def _fetch_scores() -> tuple[dict, list]:
 
     matches = matches_resp.json().get("matches", [])
     scorers = scorers_resp.json().get("scorers", [])
-    zafronix = await _get_zafronix_data()
-    scores = _build_scores(matches, scorers, zafronix.get("standings"))
+    if zafronix_standings is None:
+        zafronix = await _get_zafronix_data()
+        zafronix_standings = zafronix.get("standings")
+    scores = _build_scores(matches, scorers, zafronix_standings)
     return scores, matches
 
 
