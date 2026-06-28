@@ -102,10 +102,11 @@ def test_compose_message_has_all_sections_in_order():
     dyk = [{"id": "x", "fact": "Fact one."}]
     otd = [{"year": 1954, "fact": "Battle of Bern stuff."}]
     msg = trivia.compose_message(dyk, otd, now)
-    assert msg.startswith("*⚽ Scope3 World Cup — Did You Know?*")
-    assert "💡 *Did you know?* Fact one." in msg
+    assert msg.startswith("*Did You Know? ⚽*")
+    assert "💡 Fact one." in msg
     assert "🗓️ *On this exact day, 1954:* Battle of Bern stuff." in msg
-    assert "31,980 minutes until the 2026 World Cup Final" in msg
+    assert "31,980 minutes until the 2026 World Cup Final." in msg
+    assert "<http://tinyurl.com/scopee-wc2026|Scopee's Challenge>" in msg
     # countdown is the last line
     assert msg.strip().splitlines()[-1].startswith("⏱️")
 
@@ -134,5 +135,5 @@ def test_build_daily_post_thin_day_has_two_did_you_knows():
     # Jan 1: no on-this-day fact and no api key -> fall back to 2 did-you-knows
     now = datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc)
     msg = asyncio.run(trivia.build_daily_post(now, ""))
-    assert msg.count("💡 *Did you know?*") == 2
+    assert msg.count("💡 ") == 2
     assert "🗓️" not in msg
