@@ -315,17 +315,20 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
             for zm in stage_matches:
                 # Apply corrections
                 match_id = zm.get("matchId")
-                home = zm.get("home")
-                away = zm.get("away")
+                home_raw = zm.get("home")
+                away_raw = zm.get("away")
+                home = _normalize_name(home_raw) if home_raw else None
+                away = _normalize_name(away_raw) if away_raw else None
                 if match_id and match_id in _ZAFRONIX_CORRECTIONS:
                     correction = _ZAFRONIX_CORRECTIONS[match_id]
+                    log.info("Applying Zafronix correction for %s: %s vs %s", match_id, correction.get("home"), correction.get("away"))
                     home = correction.get("home", home)
                     away = correction.get("away", away)
 
                 # Treat unknown teams as None
-                if home is not None and home not in _KNOWN_TEAMS:
+                if home and home not in _KNOWN_TEAMS:
                     home = None
-                if away is not None and away not in _KNOWN_TEAMS:
+                if away and away not in _KNOWN_TEAMS:
                     away = None
 
                 # Look up fd match (only possible when both teams are known)
@@ -805,7 +808,7 @@ async def _fetch_scores(zafronix_standings: dict | None = None) -> tuple[dict, l
 
     matches = matches_resp.json().get("matches", [])
     scorers = scorers_resp.json().get("scorers", [])
-    if zafronix_standings is None:
+    if not zafronix_standings:
         zafronix = await _get_zafronix_data()
         zafronix_standings = zafronix.get("standings")
     scores = _build_scores(matches, scorers, zafronix_standings)
