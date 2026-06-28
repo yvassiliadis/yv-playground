@@ -30,6 +30,11 @@ if not FOOTBALL_DATA_API_KEY:
     logging.warning("FOOTBALL_DATA_API_KEY is not set — /api/scores will fail")
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
 
+ZAFRONIX_API_KEY = os.environ.get("ZAFRONIX_WC_API_KEY", "")
+if not ZAFRONIX_API_KEY:
+    logging.warning("ZAFRONIX_WC_API_KEY is not set — Zafronix endpoints will fail")
+ZAFRONIX_BASE = "https://api.zafronix.com/fifa/worldcup/v1"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -104,6 +109,12 @@ _NAME_MAP: dict[str, str] = {
     "Turkey":                "Türkiye",
 }
 
+# Corrections for known Zafronix data errors. Key is matchId; value overrides home/away.
+_ZAFRONIX_CORRECTIONS: dict[str, dict] = {
+    "2026-074": {"home": "Germany", "away": "Paraguay"},
+    "2026-077": {"home": "France", "away": "Sweden"},
+}
+
 # Golden Boot points are awarded once the tournament is over (after the Final on Jul 19 2026)
 _GOLDEN_BOOT_AFTER = datetime(2026, 7, 19, tzinfo=timezone.utc)
 
@@ -139,16 +150,31 @@ class Cache:
     scores: dict | None = None
     matches: list | None = None
     fetched_at: datetime | None = None
+    zafronix_bracket: dict | None = None
+    zafronix_standings: dict | None = None
+    zafronix_fetched_at: datetime | None = None
 
 
 _cache = Cache()
 _fetch_lock = asyncio.Lock()
+_zafronix_fetch_lock = asyncio.Lock()
 _subscribers: set[asyncio.Queue] = set()
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+# No matches are scheduled during 03:00–12:00 ET (07:00–16:00 UTC).
+_ZAFRONIX_QUIET_START_UTC = 7
+_ZAFRONIX_QUIET_END_UTC = 16
+
+
+def _in_zafronix_fetch_window() -> bool:
+    """Return True when it is appropriate to make new Zafronix requests."""
+    hour = datetime.now(tz=timezone.utc).hour
+    return not (_ZAFRONIX_QUIET_START_UTC <= hour < _ZAFRONIX_QUIET_END_UTC)
 
 
 def _normalize_name(name: str) -> str:
@@ -702,6 +728,56 @@ def _needs_refresh(matches: list) -> bool:
         if window_start <= now <= window_end:
             return True
     return False
+
+
+async def _fetch_zafronix_data() -> tuple[dict, dict]:
+    """Fetch bracket and standings from Zafronix. Returns (bracket, standings)."""
+    headers = {"X-API-Key": ZAFRONIX_API_KEY}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        bracket_resp, standings_resp = await asyncio.gather(
+            client.get(f"{ZAFRONIX_BASE}/bracket", params={"year": 2026}, headers=headers),
+            client.get(f"{ZAFRONIX_BASE}/standings", params={"year": 2026}, headers=headers),
+        )
+    bracket_resp.raise_for_status()
+    standings_resp.raise_for_status()
+    return bracket_resp.json(), standings_resp.json()
+
+
+async def _get_zafronix_data() -> dict:
+    """Return cached Zafronix data, refreshing when cache is stale and in fetch window."""
+    async with _zafronix_fetch_lock:
+        now = datetime.now(tz=timezone.utc)
+        cache_age = (
+            (now - _cache.zafronix_fetched_at).total_seconds()
+            if _cache.zafronix_fetched_at
+            else float("inf")
+        )
+
+        if _cache.zafronix_bracket is None:
+            # Cold start: fetch regardless of window
+            try:
+                bracket, standings = await _fetch_zafronix_data()
+                _cache.zafronix_bracket = bracket
+                _cache.zafronix_standings = standings
+                _cache.zafronix_fetched_at = now
+                log.info("Zafronix cold-start fetch complete")
+            except Exception as exc:
+                log.warning("Zafronix cold-start fetch failed: %s", exc)
+        elif cache_age > 3600 and _in_zafronix_fetch_window():
+            # Cache expired and in fetch window: refresh
+            try:
+                bracket, standings = await _fetch_zafronix_data()
+                _cache.zafronix_bracket = bracket
+                _cache.zafronix_standings = standings
+                _cache.zafronix_fetched_at = now
+                log.info("Zafronix cache refreshed")
+            except Exception as exc:
+                log.warning("Zafronix refresh failed, using stale cache: %s", exc)
+
+        return {
+            "bracket": _cache.zafronix_bracket or {},
+            "standings": _cache.zafronix_standings or {},
+        }
 
 
 async def _fetch_scores() -> tuple[dict, list]:
