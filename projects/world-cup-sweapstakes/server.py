@@ -180,6 +180,72 @@ def _is_group_stage(stage: str) -> bool:
     return stage.startswith("GROUP_STAGE") or stage in _GROUP_STAGES
 
 
+def _group_qualifiers(matches: list) -> set[str]:
+    """Return teams confirmed as top-2 in their group (all 3 games played).
+
+    These teams are guaranteed R32 participants even before the API populates
+    their fixture slot with real team names.
+    """
+    records: dict[str, dict] = {}
+    groups: dict[str, list] = {}
+
+    for match in matches:
+        if not _is_group_stage(match.get("stage", "")):
+            continue
+        home_raw = match.get("homeTeam", {}).get("name", "")
+        away_raw = match.get("awayTeam", {}).get("name", "")
+        home = _normalize_name(home_raw)
+        away = _normalize_name(away_raw)
+        if home not in _KNOWN_TEAMS or away not in _KNOWN_TEAMS:
+            continue
+
+        group_field = match.get("group") or ""
+        if group_field.startswith("GROUP_"):
+            letter = group_field[len("GROUP_"):]
+        elif len(group_field) == 1 and group_field.isalpha():
+            letter = group_field.upper()
+        else:
+            continue
+
+        for team in (home, away):
+            if team not in records:
+                records[team] = {"played": 0, "pts": 0, "gd": 0, "gf": 0}
+                groups.setdefault(letter, [])
+                if team not in groups[letter]:
+                    groups[letter].append(team)
+
+        status = match.get("status", "")
+        ft = match.get("score", {}).get("fullTime", {})
+        hg, ag = ft.get("home"), ft.get("away")
+        if status == "FINISHED" and hg is not None and ag is not None:
+            records[home]["played"] += 1
+            records[away]["played"] += 1
+            records[home]["gf"] += hg
+            records[away]["gf"] += ag
+            records[home]["gd"] += hg - ag
+            records[away]["gd"] += ag - hg
+            if hg > ag:
+                records[home]["pts"] += 3
+            elif ag > hg:
+                records[away]["pts"] += 3
+            else:
+                records[home]["pts"] += 1
+                records[away]["pts"] += 1
+
+    qualifiers: set[str] = set()
+    for letter, members in groups.items():
+        if len(members) != 4:
+            continue
+        if not all(records[t]["played"] == 3 for t in members):
+            continue
+        sorted_members = sorted(
+            members,
+            key=lambda t: (-records[t]["pts"], -records[t]["gd"], -records[t]["gf"]),
+        )
+        qualifiers.update(sorted_members[:2])
+    return qualifiers
+
+
 _BRACKET_ROUNDS = [
     {"id": "r32",   "label": "Round of 32",    "stages": ["LAST_32"]},
     {"id": "r16",   "label": "Round of 16",    "stages": ["LAST_16"]},
@@ -192,6 +258,20 @@ _MATCH_LABEL = {
     "FINAL":       "Final",
     "THIRD_PLACE": "3rd Place",
 }
+
+
+def _live_score(score_data: dict) -> tuple[int | None, int | None]:
+    """Return (home_goals, away_goals) using the best available score field.
+
+    football-data.org sets fullTime to null during a live match; halfTime
+    carries the end-of-first-half score once it is known.
+    """
+    for field in ("fullTime", "halfTime"):
+        block = score_data.get(field) or {}
+        h, a = block.get("home"), block.get("away")
+        if h is not None and a is not None:
+            return h, a
+    return None, None
 
 
 def _fmt_date_range(utc_dates: list[str]) -> str:
@@ -231,7 +311,7 @@ def _build_bracket(matches: list) -> dict:
 
         for stage in round_def["stages"]:
             stage_matches = by_stage.get(stage, [])
-            stage_matches = sorted(stage_matches, key=lambda m: m.get("utcDate") or "")
+            stage_matches = sorted(stage_matches, key=lambda m: m.get("id") or 0)
             match_label = _MATCH_LABEL.get(stage)
 
             for match in stage_matches:
@@ -274,8 +354,13 @@ def _build_groups(matches: list) -> dict:
     standings: dict[str, dict[str, dict]] = {}  # group_letter -> {team_name -> stats}
     group_matches: dict[str, list] = {}  # group_letter -> [match_entry]
 
+    stages_seen: set[str] = set()
+    groups_seen: set[str] = set()
+
     for match in matches:
         stage = match.get("stage", "")
+        stages_seen.add(stage)
+
         if not _is_group_stage(stage):
             continue
 
@@ -284,22 +369,50 @@ def _build_groups(matches: list) -> dict:
         home = _normalize_name(home_raw)
         away = _normalize_name(away_raw)
 
-        if home not in _KNOWN_TEAMS or away not in _KNOWN_TEAMS:
+        if not home or not away:
             continue
 
         group_field = match.get("group") or ""
-        # Expect "GROUP_A", "GROUP_B", etc.
-        if not group_field.startswith("GROUP_"):
-            continue
-        letter = group_field[len("GROUP_"):]
-        if not letter or len(letter) != 1 or not letter.isalpha():
+        groups_seen.add(group_field)
+        if group_field.startswith("GROUP_"):
+            letter = group_field[len("GROUP_"):]
+        elif len(group_field) == 1 and group_field.isalpha():
+            letter = group_field.upper()
+        else:
+            letter = None  # group field absent or unrecognised
+
+        if letter and (len(letter) != 1 or not letter.isalpha()):
+            letter = None
+
+        status = match.get("status", "")
+        score_data = match.get("score", {})
+        hg, ag = _live_score(score_data)
+
+        match_entry = {
+            "home": home,
+            "away": away,
+            "homeScore": hg,
+            "awayScore": ag,
+            "status": status,
+            "utcDate": match.get("utcDate"),
+            "matchday": match.get("matchday"),
+            "minute": match.get("minute"),
+            "duration": score_data.get("duration"),
+        }
+
+        # Matches without a parseable group letter still appear in the schedule
+        # but are excluded from standings (we can't group them correctly).
+        group_key = letter or "_"
+        if group_key not in group_matches:
+            group_matches[group_key] = []
+        group_matches[group_key].append(match_entry)
+
+        if letter is None:
             continue
 
-        # Ensure structures exist
+        # Standings only for matches with a known group letter
         if letter not in standings:
             standings[letter] = {}
-            group_matches[letter] = []
-
         for team in (home, away):
             if team not in standings[letter]:
                 standings[letter][team] = {
@@ -311,12 +424,6 @@ def _build_groups(matches: list) -> dict:
                     "gf": 0,
                     "ga": 0,
                 }
-
-        status = match.get("status", "")
-        score_data = match.get("score", {})
-        full_time = score_data.get("fullTime", {})
-        hg = full_time.get("home")
-        ag = full_time.get("away")
 
         if status == "FINISHED" and hg is not None and ag is not None:
             standings[letter][home]["played"] += 1
@@ -335,17 +442,11 @@ def _build_groups(matches: list) -> dict:
                 standings[letter][home]["drawn"] += 1
                 standings[letter][away]["drawn"] += 1
 
-        group_matches[letter].append({
-            "home": home,
-            "away": away,
-            "homeScore": hg,
-            "awayScore": ag,
-            "status": status,
-            "utcDate": match.get("utcDate"),
-            "matchday": match.get("matchday"),
-            "minute": match.get("minute"),
-            "duration": score_data.get("duration"),
-        })
+    log.info(
+        "build_groups: stages=%s groups=%s",
+        sorted(stages_seen),
+        sorted(groups_seen),
+    )
 
     result = {}
     for letter in sorted(standings.keys()):
@@ -367,6 +468,16 @@ def _build_groups(matches: list) -> dict:
             "matches": sorted_matches,
         }
 
+    # Include ungrouped matches so the schedule tab can display them.
+    # The "_" key is intentionally not a valid group letter — clients
+    # that render group standings should skip it.
+    if "_" in group_matches:
+        ungrouped = sorted(
+            group_matches["_"],
+            key=lambda m: (m.get("matchday") or 0, m.get("utcDate") or ""),
+        )
+        result["_"] = {"standings": [], "matches": ungrouped}
+
     return result
 
 
@@ -379,12 +490,8 @@ def _build_scores(matches: list, scorers: list) -> dict:
         home = _normalize_name(home_raw)
         away = _normalize_name(away_raw)
 
-        # Skip TBD / placeholder entries
-        if home not in _KNOWN_TEAMS or away not in _KNOWN_TEAMS:
-            continue
-
-        _ensure_team(scores, home)
-        _ensure_team(scores, away)
+        known_home = home in _KNOWN_TEAMS
+        known_away = away in _KNOWN_TEAMS
 
         stage = match.get("stage", "")
         status = match.get("status", "")
@@ -394,6 +501,11 @@ def _build_scores(matches: list, scorers: list) -> dict:
         ag = full_time.get("away")
 
         if _is_group_stage(stage):
+            # Group stage: skip if either team is unknown (can't attribute stats correctly)
+            if not known_home or not known_away:
+                continue
+            _ensure_team(scores, home)
+            _ensure_team(scores, away)
             # Only tally finished group matches
             if status == "FINISHED" and hg is not None and ag is not None:
                 scores[home]["gf"] += hg
@@ -410,14 +522,26 @@ def _build_scores(matches: list, scorers: list) -> dict:
                     scores[home]["gd"] += 1
                     scores[away]["gd"] += 1
         else:
-            # Knockout match
+            # Knockout match: credit known teams even if opponent is TBD
+            if not known_home and not known_away:
+                continue
+
             ko_level = _STAGE_TO_KO.get(stage)
             if ko_level is None:
                 continue
 
+            if known_home:
+                _ensure_team(scores, home)
+            if known_away:
+                _ensure_team(scores, away)
+
             if stage == "THIRD_PLACE":
                 # Both teams are SF losers; update third if finished
-                if status == "FINISHED" and hg is not None and ag is not None:
+                if known_home:
+                    _set_ko(scores, home, "sf")
+                if known_away:
+                    _set_ko(scores, away, "sf")
+                if known_home and known_away and status == "FINISHED" and hg is not None and ag is not None:
                     # Also tally goals for the third place match
                     scores[home]["gf"] += hg
                     scores[home]["ga"] += ag
@@ -430,14 +554,13 @@ def _build_scores(matches: list, scorers: list) -> dict:
                         scores[away]["third"] = "won"
                         scores[home]["third"] = "lost"
                     # Draw shouldn't happen but leave third="" if so
-                # ko stays at sf (already set by SF match)
-                _set_ko(scores, home, "sf")
-                _set_ko(scores, away, "sf")
             elif stage == "FINAL":
                 # Both teams reached the final
-                _set_ko(scores, home, "final")
-                _set_ko(scores, away, "final")
-                if status == "FINISHED" and hg is not None and ag is not None:
+                if known_home:
+                    _set_ko(scores, home, "final")
+                if known_away:
+                    _set_ko(scores, away, "final")
+                if known_home and known_away and status == "FINISHED" and hg is not None and ag is not None:
                     scores[home]["gf"] += hg
                     scores[home]["ga"] += ag
                     scores[away]["gf"] += ag
@@ -450,13 +573,21 @@ def _build_scores(matches: list, scorers: list) -> dict:
                         _set_ko(scores, away, "winner")
             else:
                 # Regular knockout (LAST_32, LAST_16, QF, SF)
-                _set_ko(scores, home, ko_level)
-                _set_ko(scores, away, ko_level)
-                if status == "FINISHED" and hg is not None and ag is not None:
+                if known_home:
+                    _set_ko(scores, home, ko_level)
+                if known_away:
+                    _set_ko(scores, away, ko_level)
+                if known_home and known_away and status == "FINISHED" and hg is not None and ag is not None:
                     scores[home]["gf"] += hg
                     scores[home]["ga"] += ag
                     scores[away]["gf"] += ag
                     scores[away]["ga"] += hg
+
+    # Credit confirmed group-stage qualifiers (top-2 finishers with all games played)
+    # before the API populates their R32 fixture with real team names.
+    for team in _group_qualifiers(matches):
+        if team in scores:
+            _set_ko(scores, team, "r32")
 
     # Golden boot — dead-heat rules: 5 pts split equally among N tied leaders.
     # Points are only awarded once GOLDEN_BOOT_FINAL is True.
@@ -684,13 +815,15 @@ async def get_bracket() -> dict:
 async def live_updates() -> StreamingResponse:
     _ensure_poll_task()
 
-    # Always fetch fresh data on connect so the client gets live state immediately
     try:
         async with _fetch_lock:
-            scores, matches = await _fetch_scores()
-            _cache.scores = scores
-            _cache.matches = matches
-            _cache.fetched_at = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=timezone.utc)
+            if _cache.scores is None or _cache.fetched_at is None or \
+               (now - _cache.fetched_at).total_seconds() > 30:
+                scores, matches = await _fetch_scores()
+                _cache.scores = scores
+                _cache.matches = matches
+                _cache.fetched_at = now
         initial = {
             "scores":  _cache.scores,
             "groups":  _build_groups(_cache.matches),
@@ -721,6 +854,53 @@ async def live_updates() -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/debug")
+async def debug_matches() -> dict:
+    """Return a digest of raw API fields to diagnose stage/group parsing issues."""
+    async with _fetch_lock:
+        if _cache.matches is None:
+            try:
+                scores, matches = await _fetch_scores()
+                _cache.scores = scores
+                _cache.matches = matches
+                _cache.fetched_at = datetime.now(tz=timezone.utc)
+            except Exception as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    stages: dict[str, int] = {}
+    groups: dict[str, int] = {}
+    sample: list[dict] = []
+    bracket_matches: list[dict] = []
+    for m in _cache.matches:  # type: ignore[union-attr]
+        s = m.get("stage", "")
+        g = m.get("group") or ""
+        stages[s] = stages.get(s, 0) + 1
+        groups[g] = groups.get(g, 0) + 1
+        if len(sample) < 5:
+            sample.append({
+                "id": m.get("id"),
+                "stage": s,
+                "group": g,
+                "matchday": m.get("matchday"),
+                "home": m.get("homeTeam", {}).get("name"),
+                "away": m.get("awayTeam", {}).get("name"),
+                "utcDate": m.get("utcDate"),
+                "status": m.get("status"),
+            })
+        if s in ("LAST_32", "LAST_16", "QUARTER_FINALS", "SEMI_FINALS", "FINAL", "THIRD_PLACE"):
+            bracket_matches.append({
+                "id": m.get("id"),
+                "stage": s,
+                "matchday": m.get("matchday"),
+                "home": m.get("homeTeam", {}).get("name"),
+                "away": m.get("awayTeam", {}).get("name"),
+                "utcDate": m.get("utcDate"),
+                "status": m.get("status"),
+            })
+    bracket_matches.sort(key=lambda m: (m.get("utcDate") or "", m.get("id") or 0))
+    return {"stages": stages, "groups": groups, "sample": sample, "bracket": bracket_matches}
 
 
 # ---------------------------------------------------------------------------
