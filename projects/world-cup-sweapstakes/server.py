@@ -313,6 +313,10 @@ def _bracket_order_key(stages_data: dict) -> dict:
     leaf_idx = {no: i for i, no in enumerate(leaf_order(final))}
 
     def leftmost(m):
+        # Follow the home feeder down to a leaf; its leaf position is the
+        # match's display rank. The fallback only applies to matches not
+        # reachable from the final (e.g. third-place), which are ordered
+        # within their own stage anyway, so it just sends them to the end.
         home_feeder = feeder(m.get("homeRef"))
         return leftmost(home_feeder) if home_feeder else leaf_idx.get(m.get("matchNo"), 1_000_000)
 

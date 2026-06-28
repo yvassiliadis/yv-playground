@@ -1143,7 +1143,7 @@ tabBtns.forEach(btn => {
 const groupsHead = document.getElementById('groupsHead');
 function toggleGroups() {
   const open = document.getElementById('groupsSection').classList.toggle('open');
-  groupsHead.setAttribute('aria-expanded', open ? 'true' : 'false');
+  groupsHead.setAttribute('aria-expanded', open);
 }
 groupsHead.addEventListener('click', toggleGroups);
 groupsHead.addEventListener('keydown', (e) => {
@@ -1189,6 +1189,10 @@ let ROWS_BASE = [];
 
 /* ============ TAB: GROUPS ============ */
 let groupsLoaded = false;
+let groupsData = null;
+// Teams that reached the knockouts, derived from the bracket's R32 round.
+// Empty until the bracket is populated (i.e. during the group stage).
+let advancedTeams = new Set();
 
 function fmtDt(isoStr) {
   const d = new Date(isoStr);
@@ -1225,8 +1229,14 @@ function buildGroupCard(letter, group) {
   group.standings.forEach((s, i) => {
     const gd = s.played > 0 ? (s.gd > 0 ? `+${s.gd}` : `${s.gd}`) : '–';
     const tr = document.createElement('tr');
-    if (i < 2 && anyPlayed) tr.className = 'adv';
-    else if (i === 2 && anyPlayed) tr.className = 'maybe';
+    if (advancedTeams.size) {
+      // Knockouts are set: highlight teams that advanced, grey out the rest.
+      if (advancedTeams.has(s.name)) tr.className = 'adv';
+    } else if (anyPlayed) {
+      // Group stage: hint at likely qualifiers by standing position.
+      if (i < 2) tr.className = 'adv';
+      else if (i === 2) tr.className = 'maybe';
+    }
     tr.innerHTML = `
       <td><div class="g-team-cell">
         <span>${flag(s.name)}</span>
@@ -1276,6 +1286,7 @@ function buildGroupCard(letter, group) {
 
 function _applyGroups(data) {
   groupsLoaded = true;
+  groupsData = data;
   const grid = document.getElementById('groupsGrid');
   grid.innerHTML = '';
   for (const [letter, group] of Object.entries(data)) {
@@ -1442,6 +1453,22 @@ function _applyBracket(data) {
       col.appendChild(matchList);
       grid.appendChild(col);
     });
+  const hadAdvanced = advancedTeams.size > 0;
+  const r32 = data.rounds.find(r => r.id === 'r32');
+  advancedTeams = new Set();
+  if (r32) {
+    r32.matches.forEach(m => {
+      if (m.home) advancedTeams.add(m.home);
+      if (m.away) advancedTeams.add(m.away);
+    });
+  }
+  // Only re-grey already-rendered groups the first time we learn who advanced
+  // (the initial load race). On later updates the groups render already sees
+  // advancedTeams, so the SSE handler's own _applyGroups call suffices.
+  if (!hadAdvanced && advancedTeams.size && groupsLoaded && groupsData) {
+    _applyGroups(groupsData);
+  }
+
   requestAnimationFrame(drawBracketLines);
   document.fonts.ready.then(drawBracketLines);
 }
