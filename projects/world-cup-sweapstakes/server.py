@@ -17,9 +17,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
+import trivia
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +30,10 @@ FOOTBALL_DATA_API_KEY = os.environ.get("FOOTBALL_DATA_API_KEY", "")
 if not FOOTBALL_DATA_API_KEY:
     logging.warning("FOOTBALL_DATA_API_KEY is not set — /api/scores will fail")
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
+
+ZAFRONIX_WC_API_KEY = os.environ.get("ZAFRONIX_WC_API_KEY", "")
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+TRIVIA_TRIGGER_TOKEN = os.environ.get("TRIVIA_TRIGGER_TOKEN", "")
 
 ZAFRONIX_API_KEY = os.environ.get("ZAFRONIX_WC_API_KEY", "")
 if not ZAFRONIX_API_KEY:
@@ -1000,6 +1005,31 @@ async def debug_matches() -> dict:
             })
     bracket_matches.sort(key=lambda m: (m.get("utcDate") or "", m.get("id") or 0))
     return {"stages": stages, "groups": groups, "sample": sample, "bracket": bracket_matches}
+
+
+@app.get("/api/trivia/preview")
+async def trivia_preview() -> dict:
+    now = datetime.now(tz=timezone.utc)
+    message = await trivia.build_daily_post(now, ZAFRONIX_WC_API_KEY)
+    return {"message": message}
+
+
+@app.post("/api/trivia/post")
+async def trivia_post(x_trigger_token: str = Header(default="")) -> dict:
+    if not TRIVIA_TRIGGER_TOKEN or x_trigger_token != TRIVIA_TRIGGER_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid trigger token")
+    now = datetime.now(tz=timezone.utc)
+    message = await trivia.build_daily_post(now, ZAFRONIX_WC_API_KEY)
+    posted = False
+    if SLACK_WEBHOOK_URL:
+        try:
+            posted = await trivia.post_to_slack(message, SLACK_WEBHOOK_URL)
+        except Exception as exc:
+            log.error("Slack post failed: %s", exc)
+            raise HTTPException(status_code=502, detail="Slack post failed") from exc
+    else:
+        log.warning("SLACK_WEBHOOK_URL not set — message composed but not posted")
+    return {"posted": posted, "message": message}
 
 
 # ---------------------------------------------------------------------------
