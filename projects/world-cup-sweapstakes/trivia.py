@@ -109,7 +109,7 @@ def minutes_to_final(now: datetime) -> int:
 
 
 def compose_message(dyk: list[dict], otd: list[dict], now: datetime) -> str:
-    lines = ["*Did You Know ⚽*", ""]
+    lines = ["*Did You Know? ⚽*", ""]
     for fact in dyk:
         lines.append(f"💡 {fact['fact']}")
         lines.append("")
@@ -122,7 +122,7 @@ def compose_message(dyk: list[dict], otd: list[dict], now: datetime) -> str:
     mins = minutes_to_final(now)
     lines.append(
         f"⏱️ *{mins:,} minutes until the 2026 World Cup Final.* "
-        "Don't forget to check how you're stacking in "
+        "Don't forget to check how you're stacking up in "
         "<http://tinyurl.com/scopee-wc2026|Scopee's Challenge>"
     )
     return "\n".join(lines)

@@ -102,7 +102,7 @@ def test_compose_message_has_all_sections_in_order():
     dyk = [{"id": "x", "fact": "Fact one."}]
     otd = [{"year": 1954, "fact": "Battle of Bern stuff."}]
     msg = trivia.compose_message(dyk, otd, now)
-    assert msg.startswith("*Did You Know ⚽*")
+    assert msg.startswith("*Did You Know? ⚽*")
     assert "💡 Fact one." in msg
     assert "🗓️ *On this exact day, 1954:* Battle of Bern stuff." in msg
     assert "31,980 minutes until the 2026 World Cup Final." in msg
