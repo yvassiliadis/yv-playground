@@ -1168,14 +1168,13 @@ const KO_LABEL = {
 };
 const KO_INC  = {r32:2, r16:3, qf:5, sf:8, final:12, winner:20};
 const KO_ROUNDS = ["r32","r16","qf","sf","final","winner"];
-const KO_ELIM_ORDER = ["","r32","r16","qf","sf","final","winner"];
 function isEliminated(team) {
   const s = SCORES[team];
   if (!s) return false;
-  const vals = Object.values(SCORES);
-  if (!vals.length) return false;
-  const maxIdx = Math.max(...vals.map(t => KO_ELIM_ORDER.indexOf(t.ko)));
-  return maxIdx > 0 && maxIdx > KO_ELIM_ORDER.indexOf(s.ko);
+  if (s.out) return true;  // lost a knockout match
+  // Group non-qualifiers drop out once the knockout bracket is populated.
+  const koStarted = Object.values(SCORES).some(t => t.ko);
+  return koStarted && !s.ko;
 }
 function isParticipantEliminated(r) {
   return [r.tier_1, r.tier_2, r.tier_3, r.tier_4].every(isEliminated);
