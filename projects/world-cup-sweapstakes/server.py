@@ -201,6 +201,25 @@ def _set_ko(scores: dict, team: str, level: str) -> None:
         scores[team]["ko"] = level
 
 
+def _ko_match_loser(score_data: dict, home: str, away: str, hg: int | None, ag: int | None) -> str | None:
+    """Loser of a finished knockout match, or None if undecided.
+
+    Prefers the explicit winner field (covers penalty shootouts where full-time
+    is level); falls back to goals when it's absent.
+    """
+    winner_side = score_data.get("winner")
+    if winner_side == "HOME_TEAM":
+        return away
+    if winner_side == "AWAY_TEAM":
+        return home
+    if hg is not None and ag is not None:
+        if hg > ag:
+            return away
+        if ag > hg:
+            return home
+    return None
+
+
 def _ensure_team(scores: dict, team: str) -> None:
     if team not in scores:
         scores[team] = {
@@ -212,6 +231,7 @@ def _ensure_team(scores: dict, team: str) -> None:
             "ko": "",
             "third": "",
             "boot": 0,
+            "out": False,
         }
 
 
@@ -675,6 +695,9 @@ def _build_scores(matches: list, scorers: list, zafronix_standings: dict | None 
                         _set_ko(scores, home, "winner")
                     elif winner_side == "AWAY_TEAM":
                         _set_ko(scores, away, "winner")
+                    loser = _ko_match_loser(score_data, home, away, hg, ag)
+                    if loser:
+                        scores[loser]["out"] = True
             else:
                 # Regular knockout (LAST_32, LAST_16, QF, SF)
                 if known_home:
@@ -686,6 +709,9 @@ def _build_scores(matches: list, scorers: list, zafronix_standings: dict | None 
                     scores[home]["ga"] += ag
                     scores[away]["gf"] += ag
                     scores[away]["ga"] += hg
+                    loser = _ko_match_loser(score_data, home, away, hg, ag)
+                    if loser:
+                        scores[loser]["out"] = True
 
     # Credit confirmed group-stage qualifiers with their R32 advancement.
     qualifiers = _zafronix_advanced_teams(zafronix_standings) if zafronix_standings is not None else set()
