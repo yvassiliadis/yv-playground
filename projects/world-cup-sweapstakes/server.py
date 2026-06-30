@@ -291,6 +291,13 @@ def _match_score_detail(score_data: dict) -> tuple[int | None, int | None, int |
         home, away = _live_score(score_data)
 
     if duration == "PENALTY_SHOOTOUT":
+        # football-data folds the shootout into fullTime, so the tally is
+        # fullTime minus the on-pitch score. Prefer that over the explicit
+        # penalties block, which this feed can report as an impossible tie.
+        ft = score_data.get("fullTime") or {}
+        fth, fta = ft.get("home"), ft.get("away")
+        if home is not None and fth is not None and fta is not None and (fth, fta) != (home, away):
+            return home, away, fth - home, fta - away
         pens = score_data.get("penalties") or {}
         return home, away, pens.get("home"), pens.get("away")
     return home, away, None, None
