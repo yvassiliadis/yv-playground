@@ -26,11 +26,25 @@ def test_ko_loser_is_marked_out():
 
 
 def test_score_detail_penalty_shootout():
-    # 1-1 after extra time, decided on penalties: headline is the on-pitch
-    # score, penalties reported separately.
+    # 1-1 after extra time, won 4-3 on penalties. fullTime folds in the
+    # shootout (1+3=4, 1+4=5); the explicit penalties block is an unreliable
+    # tie, so the tally is recovered from fullTime minus the on-pitch score.
     score = {
         "duration": "PENALTY_SHOOTOUT",
-        "fullTime": {"home": 5, "away": 6},
+        "fullTime": {"home": 4, "away": 5},
+        "regularTime": {"home": 1, "away": 1},
+        "extraTime": {"home": 0, "away": 0},
+        "penalties": {"home": 4, "away": 4},
+    }
+    assert server._match_score_detail(score) == (1, 1, 3, 4)
+
+
+def test_score_detail_penalty_falls_back_to_penalties_block():
+    # If fullTime does not carry the shootout (equals the on-pitch score),
+    # fall back to the explicit penalties block.
+    score = {
+        "duration": "PENALTY_SHOOTOUT",
+        "fullTime": {"home": 1, "away": 1},
         "regularTime": {"home": 1, "away": 1},
         "extraTime": {"home": 0, "away": 0},
         "penalties": {"home": 3, "away": 4},
