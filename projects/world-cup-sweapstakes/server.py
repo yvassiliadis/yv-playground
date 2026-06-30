@@ -273,6 +273,29 @@ def _live_score(score_data: dict) -> tuple[int | None, int | None]:
     return None, None
 
 
+def _match_score_detail(score_data: dict) -> tuple[int | None, int | None, int | None, int | None]:
+    """Return (home, away, pen_home, pen_away) for display.
+
+    For matches decided in extra time or on penalties, the headline score is the
+    on-pitch result (regulation + extra time) — the level score going into a
+    shootout — and the shootout tally is reported separately. Falls back to the
+    live/full-time score otherwise.
+    """
+    duration = score_data.get("duration")
+    reg = score_data.get("regularTime") or {}
+    if duration in ("EXTRA_TIME", "PENALTY_SHOOTOUT") and reg.get("home") is not None:
+        et = score_data.get("extraTime") or {}
+        home = (reg.get("home") or 0) + (et.get("home") or 0)
+        away = (reg.get("away") or 0) + (et.get("away") or 0)
+    else:
+        home, away = _live_score(score_data)
+
+    if duration == "PENALTY_SHOOTOUT":
+        pens = score_data.get("penalties") or {}
+        return home, away, pens.get("home"), pens.get("away")
+    return home, away, None, None
+
+
 def _fmt_date_range(utc_dates: list[str]) -> str:
     """Return a human-readable date range like 'Jun 28 – Jul 1' or 'Jul 19'."""
     parsed = []
@@ -420,11 +443,13 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
                     fd_match = fd_by_teams.get((home, away)) or fd_by_teams.get((away, home))
 
                 # Score and status
+                pen_home = pen_away = None
                 if fd_match is not None:
-                    hg, ag = _live_score(fd_match.get("score", {}))
+                    score = fd_match.get("score", {})
+                    hg, ag, pen_home, pen_away = _match_score_detail(score)
                     status = fd_match.get("status", "SCHEDULED")
                     minute = fd_match.get("minute")
-                    duration = fd_match.get("score", {}).get("duration")
+                    duration = score.get("duration")
                 else:
                     hg = zm.get("homeScore")
                     ag = zm.get("awayScore")
@@ -454,6 +479,8 @@ def _build_bracket(zafronix_bracket: dict, fd_matches: list) -> dict:
                     "away":      away,
                     "homeScore": hg,
                     "awayScore": ag,
+                    "penHome":   pen_home,
+                    "penAway":   pen_away,
                     "status":    status,
                     "utcDate":   kickoff,
                     "label":     match_label,

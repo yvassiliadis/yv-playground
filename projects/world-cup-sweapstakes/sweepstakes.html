@@ -767,6 +767,7 @@
   .b-card.is-final{border-top:2px solid var(--gold);}
   .b-card-hdr{padding:5px 10px;font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:5px;}
   .b-card-hdr.is-live{color:var(--red);}
+  .b-dur{margin-left:auto;font-weight:500;color:var(--muted);}
   .b-card-hdr.is-final-label{color:var(--gold);}
   .b-live-dot{width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.8s infinite;flex-shrink:0;}
   .b-team{display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:.82rem;}
@@ -775,6 +776,7 @@
   .b-name.tbd{color:var(--muted);}
   .b-goals{font-family:var(--mono);font-size:.9rem;font-weight:500;min-width:16px;text-align:right;flex-shrink:0;}
   .b-goals.dash{color:var(--muted);font-weight:400;}
+  .b-pens{font-size:.68rem;color:var(--muted);font-weight:400;margin-left:3px;}
   .b-goals.live{color:var(--red);}
   .b-team.out{opacity:.4;}
 
@@ -1328,24 +1330,37 @@ function buildMatchCard(m) {
   } else {
     hdr.className = 'b-card-hdr' + (isFinal ? ' is-final-label' : '');
     const {date, time} = fmtDt(m.utcDate);
-    hdr.textContent = (m.label ? m.label + ' · ' : '') + date + ' · ' + time;
+    const left = (m.label ? m.label + ' · ' : '') + date + ' · ' + time;
+    const durTag = isFinished
+      ? (m.duration === 'PENALTY_SHOOTOUT' ? 'PK'
+       : m.duration === 'EXTRA_TIME'       ? 'AET' : 'FT')
+      : '';
+    hdr.innerHTML = `<span>${esc(left)}</span>${durTag ? `<span class="b-dur">${durTag}</span>` : ''}`;
   }
   card.appendChild(hdr);
 
   const homeGoals = m.homeScore, awayGoals = m.awayScore;
-  const homeIsOut = isFinished && homeGoals !== null && awayGoals !== null && homeGoals < awayGoals;
-  const awayIsOut = isFinished && homeGoals !== null && awayGoals !== null && awayGoals < homeGoals;
+  // Penalty shootouts are level on the pitch, so the winner is decided by the
+  // shootout tally rather than the headline goals.
+  const pk = m.penHome != null && m.penAway != null;
+  const homeIsOut = isFinished && (pk
+    ? m.penHome < m.penAway
+    : homeGoals !== null && awayGoals !== null && homeGoals < awayGoals);
+  const awayIsOut = isFinished && (pk
+    ? m.penAway < m.penHome
+    : homeGoals !== null && awayGoals !== null && awayGoals < homeGoals);
 
   [
-    {name: m.home, goals: homeGoals, isOut: homeIsOut},
-    {name: m.away, goals: awayGoals, isOut: awayIsOut},
-  ].forEach(({name, goals, isOut}) => {
+    {name: m.home, goals: homeGoals, pens: pk ? m.penHome : null, isOut: homeIsOut},
+    {name: m.away, goals: awayGoals, pens: pk ? m.penAway : null, isOut: awayIsOut},
+  ].forEach(({name, goals, pens, isOut}) => {
     const row = document.createElement('div');
     row.className = 'b-team' + (isOut ? ' out' : '');
     const flagHtml = name ? flag(name) : '🏳️';
     const nameHtml = `<span class="b-name${name ? '' : ' tbd'}">${esc(name || 'TBD')}</span>`;
+    const pensHtml = pens !== null ? `<span class="b-pens">(${pens})</span>` : '';
     const goalsHtml = goals !== null
-      ? `<span class="b-goals${isLive ? ' live' : ''}">${goals}</span>`
+      ? `<span class="b-goals${isLive ? ' live' : ''}">${goals}${pensHtml}</span>`
       : `<span class="b-goals dash">—</span>`;
     row.innerHTML = `<span>${flagHtml}</span>${nameHtml}${goalsHtml}`;
     card.appendChild(row);
@@ -1757,11 +1772,19 @@ function _applySchedule(groupsData, bracketData) {
       const homeName = m.home || 'TBD';
       const awayName = m.away || 'TBD';
       const sc = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
+      // Annotate decided-beyond-regulation results: "(AET)" for extra time,
+      // "(pen home–away)" for shootouts where the headline is the level score.
+      let ftScore = `${m.homeScore}–${m.awayScore}`;
+      if (m.duration === 'PENALTY_SHOOTOUT' && m.penHome != null && m.penAway != null) {
+        ftScore += ` (${m.penHome}–${m.penAway})`;
+      } else if (m.duration === 'EXTRA_TIME') {
+        ftScore += ` (AET)`;
+      }
       let scoreHtml;
       if (isLive) {
         scoreHtml = `<span class="sched-score live"><span class="sched-live-dot"></span>${sc}</span>`;
       } else if (isFinished) {
-        scoreHtml = `<span class="sched-score ft">${m.homeScore}–${m.awayScore}</span>`;
+        scoreHtml = `<span class="sched-score ft">${ftScore}</span>`;
       } else {
         scoreHtml = `<span class="sched-score upcoming">vs</span>`;
       }
