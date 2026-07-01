@@ -144,3 +144,10 @@ def test_build_message_blocks_header_only_when_no_games():
     state = {"header_blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "*hdr*"}}], "games": {}}
     blocks = slack_poll.build_message_blocks(state, now)
     assert blocks == state["header_blocks"]
+
+
+def test_poll_blocks_section_shows_kickoff_time():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks = slack_poll.poll_blocks(_game_state({})["games"], now)
+    section = [b for b in blocks if b["type"] == "section" and "kickoff" in b["text"]["text"]][0]
+    assert "3:00pm ET" in section["text"]["text"]

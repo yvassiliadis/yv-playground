@@ -102,7 +102,7 @@ POLL_HEADER = "⚽ *Today's predictions — who ya got?*"
 
 def _kickoff_label(kickoff_utc: str) -> str:
     ko = datetime.fromisoformat(kickoff_utc.replace("Z", "+00:00")).astimezone(ET)
-    return ko.strftime("%-I:%M%p").lower() + " ET"
+    return ko.strftime("%I:%M%p").lstrip("0").lower() + " ET"
 
 
 def _voter_line(game: dict) -> str:
