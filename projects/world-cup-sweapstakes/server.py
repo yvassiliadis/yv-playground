@@ -1205,7 +1205,7 @@ async def _handle_vote(payload: dict) -> None:
             {"event_type": "wc_prediction_poll", "event_payload": state},
         )
     except Exception as exc:
-        log.error("Vote handling failed: %s", exc)
+        log.error("Vote handling failed (user=%s): %s", (payload.get("user") or {}).get("id"), exc)
 
 
 @app.post("/api/slack/interactions")

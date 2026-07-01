@@ -1,4 +1,9 @@
+import hashlib
+import hmac
+import json
 import os
+import time
+import urllib.parse
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +14,7 @@ os.environ.pop("SLACK_BOT_TOKEN", None)
 os.environ.pop("SLACK_CHANNEL_ID", None)
 
 import server  # noqa: E402
+import slack_poll
 
 client = TestClient(server.app)
 
@@ -40,15 +46,6 @@ def test_post_with_token_composes_but_does_not_post_without_bot_token(monkeypatc
     assert body["posted"] is False
     texts = " ".join(b["text"]["text"] for b in body["blocks"] if b.get("type") == "section")
     assert "Did You Know?" in texts
-
-
-import hashlib
-import hmac
-import json
-import time
-import urllib.parse
-
-import slack_poll
 
 
 def _signed(body: str, secret: str):
