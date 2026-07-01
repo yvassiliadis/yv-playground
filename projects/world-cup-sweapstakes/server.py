@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import urllib.parse
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,7 +22,7 @@ import slack_poll
 import trivia
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -1176,6 +1177,53 @@ async def trivia_post(x_trigger_token: str = Header(default="")) -> dict:
     else:
         log.warning("SLACK_BOT_TOKEN/SLACK_CHANNEL_ID not set — composed but not posted")
     return {"posted": posted, "blocks": blocks}
+
+
+async def _handle_vote(payload: dict) -> None:
+    try:
+        action = payload["actions"][0]
+        value = json.loads(action["value"])
+        game_id, pick = value["game_id"], value["pick"]
+        user_id = payload["user"]["id"]
+        channel = payload["channel"]["id"]
+        ts = payload["message"]["ts"]
+        meta = payload["message"].get("metadata") or {}
+        state = meta.get("event_payload") or {}
+        now = datetime.now(tz=timezone.utc)
+        state, changed, error = slack_poll.apply_vote(state, game_id, user_id, pick, now)
+        if error == "closed":
+            await slack_poll.send_ephemeral(
+                payload["response_url"],
+                "⏱️ Voting's closed for this one — it already kicked off.",
+            )
+            return
+        if not changed:
+            return
+        blocks = slack_poll.build_message_blocks(state, now)
+        await slack_poll.update_message(
+            SLACK_BOT_TOKEN, channel, ts, blocks, "Prediction poll updated",
+            {"event_type": "wc_prediction_poll", "event_payload": state},
+        )
+    except Exception as exc:
+        log.error("Vote handling failed: %s", exc)
+
+
+@app.post("/api/slack/interactions")
+async def slack_interactions(request: Request, background: BackgroundTasks) -> dict:
+    body = (await request.body()).decode()
+    now = datetime.now(tz=timezone.utc)
+    if not slack_poll.verify_slack_signature(
+        SLACK_SIGNING_SECRET,
+        request.headers.get("X-Slack-Request-Timestamp", ""),
+        body,
+        request.headers.get("X-Slack-Signature", ""),
+        now,
+    ):
+        raise HTTPException(status_code=401, detail="bad signature")
+    parsed = urllib.parse.parse_qs(body)
+    payload = json.loads(parsed.get("payload", ["{}"])[0])
+    background.add_task(_handle_vote, payload)
+    return {}
 
 
 # ---------------------------------------------------------------------------

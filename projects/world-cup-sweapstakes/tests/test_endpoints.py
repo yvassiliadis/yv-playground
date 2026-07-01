@@ -40,3 +40,58 @@ def test_post_with_token_composes_but_does_not_post_without_bot_token(monkeypatc
     assert body["posted"] is False
     texts = " ".join(b["text"]["text"] for b in body["blocks"] if b.get("type") == "section")
     assert "Did You Know?" in texts
+
+
+import hashlib
+import hmac
+import json
+import time
+import urllib.parse
+
+import slack_poll
+
+
+def _signed(body: str, secret: str):
+    ts = str(int(time.time()))
+    base = f"v0:{ts}:{body}".encode()
+    sig = "v0=" + hmac.new(secret.encode(), base, hashlib.sha256).hexdigest()
+    return {"X-Slack-Request-Timestamp": ts, "X-Slack-Signature": sig}
+
+
+def test_interactions_rejects_bad_signature(monkeypatch):
+    monkeypatch.setattr(server, "SLACK_SIGNING_SECRET", "shhh")
+    resp = client.post(
+        "/api/slack/interactions",
+        content="payload=%7B%7D",
+        headers={"X-Slack-Request-Timestamp": "1", "X-Slack-Signature": "v0=nope"},
+    )
+    assert resp.status_code == 401
+
+
+def test_interactions_acks_and_updates(monkeypatch):
+    monkeypatch.setattr(server, "SLACK_SIGNING_SECRET", "shhh")
+    monkeypatch.setattr(server, "SLACK_BOT_TOKEN", "tok")
+    captured = {}
+
+    async def fake_update(token, channel, ts, blocks, text, metadata):
+        captured["blocks"] = blocks
+        captured["state"] = metadata["event_payload"]
+
+    monkeypatch.setattr(slack_poll, "update_message", fake_update)
+
+    state = {
+        "header_blocks": [],
+        "games": {"1": {"home": "Mexico", "away": "Ecuador",
+                        "kickoff_utc": "2099-01-01T00:00:00Z", "votes": {}}},
+    }
+    payload = {
+        "user": {"id": "U1"},
+        "channel": {"id": "C1"},
+        "message": {"ts": "1.2", "metadata": {"event_type": "wc_prediction_poll", "event_payload": state}},
+        "actions": [{"action_id": "vote_1_home", "value": json.dumps({"game_id": "1", "pick": "home"})}],
+        "response_url": "https://hooks.slack.test/x",
+    }
+    body = "payload=" + urllib.parse.quote(json.dumps(payload))
+    resp = client.post("/api/slack/interactions", content=body, headers=_signed(body, "shhh"))
+    assert resp.status_code == 200
+    assert captured["state"]["games"]["1"]["votes"] == {"U1": "home"}
