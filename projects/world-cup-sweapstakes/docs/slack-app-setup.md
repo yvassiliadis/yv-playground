@@ -8,7 +8,7 @@ so button votes can be recorded.
 2. **OAuth & Permissions** → Bot Token Scopes: add `chat:write`. Install to the
    workspace and copy the **Bot User OAuth Token** (`xoxb-…`).
 3. **Interactivity & Shortcuts** → turn on, set Request URL to
-   `https://<cloud-run-url>/api/slack/interactions`.
+   `https://wc-sweepstakes-506564556600.us-central1.run.app/api/slack/interactions`.
 4. **Basic Information** → copy the **Signing Secret**.
 5. Invite the bot to the target channel and copy the channel ID.
 

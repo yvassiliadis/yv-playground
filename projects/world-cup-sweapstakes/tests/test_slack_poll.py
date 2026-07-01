@@ -135,6 +135,31 @@ def test_poll_blocks_empty_when_no_games():
     assert slack_poll.poll_blocks({}, now) == []
 
 
+def _context_text(blocks):
+    return " ".join(
+        e["text"] for b in blocks if b["type"] == "context" for e in b["elements"]
+    )
+
+
+def test_poll_blocks_locks_game_after_kickoff():
+    after = datetime(2026, 7, 1, 20, 0, tzinfo=timezone.utc)  # past 19:00 kickoff
+    blocks = slack_poll.poll_blocks(_game_state({})["games"], after)
+    assert not any(b["type"] == "actions" for b in blocks)
+    assert "🔒" in _context_text(blocks)
+
+
+def test_poll_blocks_locked_game_keeps_tally():
+    after = datetime(2026, 7, 1, 20, 0, tzinfo=timezone.utc)
+    blocks = slack_poll.poll_blocks(_game_state({"U1": "home"})["games"], after)
+    assert "<@U1>" in _context_text(blocks)
+
+
+def test_poll_blocks_open_game_before_kickoff_has_buttons():
+    before = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)  # before 19:00 kickoff
+    blocks = slack_poll.poll_blocks(_game_state({})["games"], before)
+    assert any(b["type"] == "actions" for b in blocks)
+
+
 def test_build_message_blocks_prepends_header():
     now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     blocks = slack_poll.build_message_blocks(_game_state({}), now)
@@ -266,3 +291,12 @@ def test_send_ephemeral_posts_to_response_url(monkeypatch):
     url, kwargs = _FakeClient.calls[0]
     assert url == "https://hooks.slack.test/x"
     assert kwargs["json"]["text"] == "closed"
+
+
+def test_send_ephemeral_does_not_replace_original(monkeypatch):
+    _FakeClient.calls = []
+    monkeypatch.setattr(slack_poll.httpx, "AsyncClient", _FakeClient)
+    asyncio.run(slack_poll.send_ephemeral("https://hooks.slack.test/x", "closed"))
+    _, kwargs = _FakeClient.calls[0]
+    assert kwargs["json"]["replace_original"] is False
+    assert kwargs["json"]["response_type"] == "ephemeral"

@@ -1140,20 +1140,32 @@ async def debug_matches() -> dict:
     return {"stages": stages, "groups": groups, "sample": sample, "bracket": bracket_matches}
 
 
-def _build_daily(now: datetime, fixtures: list) -> tuple[list, dict, str]:
-    header_blocks, fallback = trivia.trivia_blocks(now)
-    state = slack_poll.initial_poll_state(fixtures, now, header_blocks)
-    blocks = slack_poll.build_message_blocks(state, now)
-    metadata = {"event_type": "wc_prediction_poll", "event_payload": state}
-    return blocks, metadata, fallback
+def _daily_messages(now: datetime, fixtures: list) -> list[dict]:
+    """The daily drop as independent Slack messages: one static trivia post
+    followed by one self-contained poll message per fixture. Splitting keeps a
+    vote (or a bug) on one poll from touching the trivia or the other games."""
+    trivia_blocks, trivia_fallback = trivia.trivia_blocks(now)
+    messages = [{"blocks": trivia_blocks, "text": trivia_fallback, "metadata": None}]
+    for fixture in fixtures:
+        state = slack_poll.initial_poll_state([fixture], now, header_blocks=[])
+        messages.append({
+            "blocks": slack_poll.build_message_blocks(state, now),
+            "text": f"{fixture['home']} vs {fixture['away']} — who ya got?",
+            "metadata": {"event_type": "wc_prediction_poll", "event_payload": state},
+        })
+    return messages
+
+
+def _combined_blocks(messages: list[dict]) -> list[dict]:
+    return [block for message in messages for block in message["blocks"]]
 
 
 @app.get("/api/trivia/preview")
 async def trivia_preview() -> dict:
     now = datetime.now(tz=timezone.utc)
     fixtures = await _todays_poll_fixtures(now)
-    blocks, _, _ = _build_daily(now, fixtures)
-    return {"blocks": blocks}
+    messages = _daily_messages(now, fixtures)
+    return {"blocks": _combined_blocks(messages), "message_count": len(messages)}
 
 
 @app.post("/api/trivia/post")
@@ -1162,20 +1174,32 @@ async def trivia_post(x_trigger_token: str = Header(default="")) -> dict:
         raise HTTPException(status_code=401, detail="invalid trigger token")
     now = datetime.now(tz=timezone.utc)
     fixtures = await _todays_poll_fixtures(now)
-    blocks, metadata, fallback = _build_daily(now, fixtures)
-    posted = False
+    messages = _daily_messages(now, fixtures)
+    posted = 0
+    errors: list[str] = []
     if SLACK_BOT_TOKEN and SLACK_CHANNEL_ID:
-        try:
-            await slack_poll.post_message(
-                SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, blocks, fallback, metadata
-            )
-            posted = True
-        except Exception as exc:
-            log.error("Slack post failed: %s", exc)
-            raise HTTPException(status_code=502, detail="Slack post failed") from exc
+        for message in messages:
+            try:
+                await slack_poll.post_message(
+                    SLACK_BOT_TOKEN, SLACK_CHANNEL_ID,
+                    message["blocks"], message["text"], message["metadata"],
+                )
+                posted += 1
+            except Exception as exc:
+                log.error("Slack post failed: %s", exc)
+                errors.append(str(exc))
+        # Only a total failure is an error; a partial drop still delivered content.
+        if posted == 0:
+            raise HTTPException(status_code=502, detail="Slack post failed")
     else:
         log.warning("SLACK_BOT_TOKEN/SLACK_CHANNEL_ID not set — composed but not posted")
-    return {"posted": posted, "blocks": blocks}
+    return {
+        "posted": posted > 0,
+        "message_count": len(messages),
+        "posted_count": posted,
+        "errors": errors,
+        "blocks": _combined_blocks(messages),
+    }
 
 
 async def _handle_vote(payload: dict) -> None:

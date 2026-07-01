@@ -83,14 +83,18 @@ def initial_poll_state(fixtures: list[dict], now: datetime, header_blocks: list[
     }
 
 
+def is_closed(game: dict, now: datetime) -> bool:
+    kickoff = datetime.fromisoformat(game["kickoff_utc"].replace("Z", "+00:00"))
+    return now >= kickoff
+
+
 def apply_vote(
     state: dict, game_id: str, user_id: str, pick: str, now: datetime
 ) -> tuple[dict, bool, str | None]:
     game = state.get("games", {}).get(game_id)
     if game is None:
         return state, False, "unknown"
-    kickoff = datetime.fromisoformat(game["kickoff_utc"].replace("Z", "+00:00"))
-    if now >= kickoff:
+    if is_closed(game, now):
         return state, False, "closed"
     if game["votes"].get(user_id) == pick:
         return state, False, None
@@ -98,9 +102,6 @@ def apply_vote(
     # rely on the pre-call state staying unchanged.
     game["votes"][user_id] = pick
     return state, True, None
-
-
-POLL_HEADER = "⚽ *Today's predictions — who ya got?*"
 
 
 def _kickoff_label(kickoff_utc: str) -> str:
@@ -129,20 +130,19 @@ def _button(game_id: str, pick: str, label: str) -> dict:
     }
 
 
-def poll_blocks(games: dict, now: datetime) -> list[dict]:
-    if not games:
-        return []
-    blocks: list[dict] = [
-        {"type": "divider"},
-        {"type": "section", "text": {"type": "mrkdwn", "text": POLL_HEADER}},
-    ]
-    for game_id, game in games.items():
-        fh, fa = flag(game["home"]), flag(game["away"])
-        title = (
-            f"*{(fh + ' ') if fh else ''}{game['home']}  vs  "
-            f"{(fa + ' ') if fa else ''}{game['away']}*  · kickoff {_kickoff_label(game['kickoff_utc'])}"
-        )
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": title}})
+def game_blocks(game_id: str, game: dict, now: datetime) -> list[dict]:
+    fh, fa = flag(game["home"]), flag(game["away"])
+    title = (
+        f"*{(fh + ' ') if fh else ''}{game['home']}  vs  "
+        f"{(fa + ' ') if fa else ''}{game['away']}*  · kickoff {_kickoff_label(game['kickoff_utc'])}"
+    )
+    blocks: list[dict] = [{"type": "section", "text": {"type": "mrkdwn", "text": title}}]
+    if is_closed(game, now):
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": "🔒 Voting closed — this one kicked off."}],
+        })
+    else:
         blocks.append({
             "type": "actions",
             "block_id": f"poll_{game_id}",
@@ -151,10 +151,17 @@ def poll_blocks(games: dict, now: datetime) -> list[dict]:
                 _button(game_id, "away", game["away"]),
             ],
         })
-        blocks.append({
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": _voter_line(game)}],
-        })
+    blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": _voter_line(game)}],
+    })
+    return blocks
+
+
+def poll_blocks(games: dict, now: datetime) -> list[dict]:
+    blocks: list[dict] = []
+    for game_id, game in games.items():
+        blocks.extend(game_blocks(game_id, game, now))
     return blocks
 
 
@@ -181,12 +188,17 @@ def verify_slack_signature(
 SLACK_API = "https://slack.com/api"
 
 
-async def post_message(token: str, channel: str, blocks: list[dict], text: str, metadata: dict) -> dict:
+async def post_message(
+    token: str, channel: str, blocks: list[dict], text: str, metadata: dict | None = None
+) -> dict:
+    body = {"channel": channel, "blocks": blocks, "text": text}
+    if metadata is not None:
+        body["metadata"] = metadata
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             f"{SLACK_API}/chat.postMessage",
             headers={"Authorization": f"Bearer {token}"},
-            json={"channel": channel, "blocks": blocks, "text": text, "metadata": metadata},
+            json=body,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -210,5 +222,8 @@ async def update_message(token: str, channel: str, ts: str, blocks: list[dict], 
 
 async def send_ephemeral(response_url: str, text: str) -> None:
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(response_url, json={"response_type": "ephemeral", "text": text})
+        resp = await client.post(
+            response_url,
+            json={"response_type": "ephemeral", "text": text, "replace_original": False},
+        )
         resp.raise_for_status()

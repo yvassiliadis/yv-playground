@@ -39,6 +39,10 @@ def test_post_without_token_is_unauthorized():
 
 
 def test_post_with_token_composes_but_does_not_post_without_bot_token(monkeypatch):
+    # server.py's load_dotenv() repopulates the Slack creds from .env, so force
+    # the module constants empty rather than relying on os.environ isolation.
+    monkeypatch.setattr(server, "SLACK_BOT_TOKEN", "")
+    monkeypatch.setattr(server, "SLACK_CHANNEL_ID", "")
     monkeypatch.setattr(server, "_todays_poll_fixtures", _no_fixtures)
     resp = client.post("/api/trivia/post", headers={"X-Trigger-Token": "test-token"})
     assert resp.status_code == 200
@@ -46,6 +50,39 @@ def test_post_with_token_composes_but_does_not_post_without_bot_token(monkeypatc
     assert body["posted"] is False
     texts = " ".join(b["text"]["text"] for b in body["blocks"] if b.get("type") == "section")
     assert "Did You Know?" in texts
+
+
+def test_post_sends_separate_message_per_game_plus_trivia(monkeypatch):
+    monkeypatch.setattr(server, "SLACK_BOT_TOKEN", "tok")
+    monkeypatch.setattr(server, "SLACK_CHANNEL_ID", "C1")
+
+    async def _two_fixtures(now):
+        return [
+            {"game_id": "1", "home": "Mexico", "away": "Ecuador",
+             "kickoff_utc": "2099-01-01T00:00:00Z", "stage": "LAST_32"},
+            {"game_id": "2", "home": "Spain", "away": "Japan",
+             "kickoff_utc": "2099-01-01T00:00:00Z", "stage": "LAST_32"},
+        ]
+
+    calls = []
+
+    async def fake_post(token, channel, blocks, text, metadata):
+        calls.append({"text": text, "metadata": metadata})
+        return {"channel": channel, "ts": "1.2"}
+
+    monkeypatch.setattr(server, "_todays_poll_fixtures", _two_fixtures)
+    monkeypatch.setattr(slack_poll, "post_message", fake_post)
+
+    resp = client.post("/api/trivia/post", headers={"X-Trigger-Token": "test-token"})
+    assert resp.status_code == 200
+    body = resp.json()
+    # 1 trivia + 2 polls = 3 independent messages
+    assert body["posted_count"] == 3
+    assert len(calls) == 3
+    # trivia message carries no poll state; each poll message carries exactly one game
+    assert calls[0]["metadata"] is None
+    poll_states = [c["metadata"]["event_payload"] for c in calls[1:]]
+    assert all(len(s["games"]) == 1 for s in poll_states)
 
 
 def _signed(body: str, secret: str):
