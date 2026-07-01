@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -183,9 +184,6 @@ def test_verify_signature_rejects_stale_timestamp():
     assert slack_poll.verify_slack_signature("shhh", old_ts, body, sig, now) is False
 
 
-import asyncio
-
-
 class _FakeResp:
     def __init__(self, payload):
         self._payload = payload
@@ -236,3 +234,35 @@ def test_post_message_raises_on_not_ok(monkeypatch):
         assert False, "expected RuntimeError"
     except RuntimeError as exc:
         assert "channel_not_found" in str(exc)
+
+
+def test_update_message_posts_to_chat_update(monkeypatch):
+    _FakeClient.calls = []
+    monkeypatch.setattr(slack_poll.httpx, "AsyncClient", _FakeClient)
+    asyncio.run(slack_poll.update_message("tok", "C1", "1.2", [], "fallback", {"event_type": "x"}))
+    url, kwargs = _FakeClient.calls[0]
+    assert url.endswith("/chat.update")
+    assert kwargs["headers"]["Authorization"] == "Bearer tok"
+    assert kwargs["json"]["ts"] == "1.2"
+
+
+def test_update_message_raises_on_not_ok(monkeypatch):
+    class _NotOk(_FakeClient):
+        async def post(self, url, **kwargs):
+            return _FakeResp({"ok": False, "error": "message_not_found"})
+
+    monkeypatch.setattr(slack_poll.httpx, "AsyncClient", _NotOk)
+    try:
+        asyncio.run(slack_poll.update_message("tok", "C1", "1.2", [], "f", {}))
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "message_not_found" in str(exc)
+
+
+def test_send_ephemeral_posts_to_response_url(monkeypatch):
+    _FakeClient.calls = []
+    monkeypatch.setattr(slack_poll.httpx, "AsyncClient", _FakeClient)
+    asyncio.run(slack_poll.send_ephemeral("https://hooks.slack.test/x", "closed"))
+    url, kwargs = _FakeClient.calls[0]
+    assert url == "https://hooks.slack.test/x"
+    assert kwargs["json"]["text"] == "closed"

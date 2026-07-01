@@ -188,11 +188,11 @@ async def post_message(token: str, channel: str, blocks: list[dict], text: str, 
             headers={"Authorization": f"Bearer {token}"},
             json={"channel": channel, "blocks": blocks, "text": text, "metadata": metadata},
         )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"chat.postMessage failed: {data.get('error')}")
-    return {"channel": data["channel"], "ts": data["ts"]}
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"chat.postMessage failed: {data.get('error')}")
+        return {"channel": data["channel"], "ts": data["ts"]}
 
 
 async def update_message(token: str, channel: str, ts: str, blocks: list[dict], text: str, metadata: dict) -> None:
@@ -202,13 +202,13 @@ async def update_message(token: str, channel: str, ts: str, blocks: list[dict], 
             headers={"Authorization": f"Bearer {token}"},
             json={"channel": channel, "ts": ts, "blocks": blocks, "text": text, "metadata": metadata},
         )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"chat.update failed: {data.get('error')}")
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"chat.update failed: {data.get('error')}")
 
 
 async def send_ephemeral(response_url: str, text: str) -> None:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(response_url, json={"response_type": "ephemeral", "text": text})
-    resp.raise_for_status()
+        resp.raise_for_status()
