@@ -38,7 +38,6 @@ if not ZAFRONIX_WC_API_KEY:
     logging.warning("ZAFRONIX_WC_API_KEY is not set — Zafronix endpoints will fail")
 ZAFRONIX_BASE = "https://api.zafronix.com/fifa/worldcup/v1"
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 TRIVIA_TRIGGER_TOKEN = os.environ.get("TRIVIA_TRIGGER_TOKEN", "")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
