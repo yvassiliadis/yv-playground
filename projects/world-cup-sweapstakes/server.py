@@ -947,10 +947,10 @@ async def _todays_poll_fixtures(now: datetime) -> list:
     try:
         zafronix = await _get_zafronix_data()
         _, matches = await _fetch_scores(zafronix_standings=zafronix.get("standings"))
+        return slack_poll.todays_fixtures(matches, now)
     except Exception as exc:
         log.warning("Fixture fetch failed — posting trivia only: %s", exc)
         return []
-    return slack_poll.todays_fixtures(matches, now)
 
 
 # ---------------------------------------------------------------------------
