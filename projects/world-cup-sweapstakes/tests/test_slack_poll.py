@@ -181,3 +181,58 @@ def test_verify_signature_rejects_stale_timestamp():
     body = "payload=%7B%7D"
     sig = _sign("shhh", old_ts, body)
     assert slack_poll.verify_slack_signature("shhh", old_ts, body, sig, now) is False
+
+
+import asyncio
+
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+class _FakeClient:
+    calls = []
+
+    def __init__(self, *a, **k):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def post(self, url, **kwargs):
+        _FakeClient.calls.append((url, kwargs))
+        return _FakeResp({"ok": True, "channel": "C1", "ts": "111.222"})
+
+
+def test_post_message_returns_channel_and_ts(monkeypatch):
+    _FakeClient.calls = []
+    monkeypatch.setattr(slack_poll.httpx, "AsyncClient", _FakeClient)
+    out = asyncio.run(slack_poll.post_message("tok", "C1", [], "fallback", {"event_type": "x"}))
+    assert out == {"channel": "C1", "ts": "111.222"}
+    url, kwargs = _FakeClient.calls[0]
+    assert url.endswith("/chat.postMessage")
+    assert kwargs["headers"]["Authorization"] == "Bearer tok"
+    assert kwargs["json"]["channel"] == "C1"
+
+
+def test_post_message_raises_on_not_ok(monkeypatch):
+    class _NotOk(_FakeClient):
+        async def post(self, url, **kwargs):
+            return _FakeResp({"ok": False, "error": "channel_not_found"})
+
+    monkeypatch.setattr(slack_poll.httpx, "AsyncClient", _NotOk)
+    try:
+        asyncio.run(slack_poll.post_message("tok", "C1", [], "f", {}))
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "channel_not_found" in str(exc)

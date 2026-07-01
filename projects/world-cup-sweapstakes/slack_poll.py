@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 import hashlib
 import hmac
 import json
+import httpx
 
 ET = ZoneInfo("America/New_York")
 
@@ -175,3 +176,39 @@ def verify_slack_signature(
     base = f"v0:{timestamp}:{body}".encode()
     digest = hmac.new(signing_secret.encode(), base, hashlib.sha256).hexdigest()
     return hmac.compare_digest(f"v0={digest}", signature or "")
+
+
+SLACK_API = "https://slack.com/api"
+
+
+async def post_message(token: str, channel: str, blocks: list[dict], text: str, metadata: dict) -> dict:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{SLACK_API}/chat.postMessage",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"channel": channel, "blocks": blocks, "text": text, "metadata": metadata},
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"chat.postMessage failed: {data.get('error')}")
+    return {"channel": data["channel"], "ts": data["ts"]}
+
+
+async def update_message(token: str, channel: str, ts: str, blocks: list[dict], text: str, metadata: dict) -> None:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{SLACK_API}/chat.update",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"channel": channel, "ts": ts, "blocks": blocks, "text": text, "metadata": metadata},
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"chat.update failed: {data.get('error')}")
+
+
+async def send_ephemeral(response_url: str, text: str) -> None:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(response_url, json={"response_type": "ephemeral", "text": text})
+    resp.raise_for_status()
