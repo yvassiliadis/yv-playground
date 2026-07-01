@@ -12,15 +12,17 @@ import asyncio
 import json
 import logging
 import os
+import urllib.parse
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
+import slack_poll
 import trivia
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -36,8 +38,10 @@ if not ZAFRONIX_WC_API_KEY:
     logging.warning("ZAFRONIX_WC_API_KEY is not set — Zafronix endpoints will fail")
 ZAFRONIX_BASE = "https://api.zafronix.com/fifa/worldcup/v1"
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 TRIVIA_TRIGGER_TOKEN = os.environ.get("TRIVIA_TRIGGER_TOKEN", "")
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
+SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -938,6 +942,17 @@ async def _fetch_scores(zafronix_standings: dict | None = None) -> tuple[dict, l
     return scores, matches
 
 
+async def _todays_poll_fixtures(now: datetime) -> list:
+    """Fetch all WC matches and return today's fixtures; [] on any fetch failure."""
+    try:
+        zafronix = await _get_zafronix_data()
+        _, matches = await _fetch_scores(zafronix_standings=zafronix.get("standings"))
+        return slack_poll.todays_fixtures(matches, now)
+    except Exception as exc:
+        log.warning("Fixture fetch failed — posting trivia only: %s", exc)
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -1125,11 +1140,20 @@ async def debug_matches() -> dict:
     return {"stages": stages, "groups": groups, "sample": sample, "bracket": bracket_matches}
 
 
+def _build_daily(now: datetime, fixtures: list) -> tuple[list, dict, str]:
+    header_blocks, fallback = trivia.trivia_blocks(now)
+    state = slack_poll.initial_poll_state(fixtures, now, header_blocks)
+    blocks = slack_poll.build_message_blocks(state, now)
+    metadata = {"event_type": "wc_prediction_poll", "event_payload": state}
+    return blocks, metadata, fallback
+
+
 @app.get("/api/trivia/preview")
 async def trivia_preview() -> dict:
     now = datetime.now(tz=timezone.utc)
-    message = await trivia.build_daily_post(now, ZAFRONIX_WC_API_KEY)
-    return {"message": message}
+    fixtures = await _todays_poll_fixtures(now)
+    blocks, _, _ = _build_daily(now, fixtures)
+    return {"blocks": blocks}
 
 
 @app.post("/api/trivia/post")
@@ -1137,17 +1161,68 @@ async def trivia_post(x_trigger_token: str = Header(default="")) -> dict:
     if not TRIVIA_TRIGGER_TOKEN or x_trigger_token != TRIVIA_TRIGGER_TOKEN:
         raise HTTPException(status_code=401, detail="invalid trigger token")
     now = datetime.now(tz=timezone.utc)
-    message = await trivia.build_daily_post(now, ZAFRONIX_WC_API_KEY)
+    fixtures = await _todays_poll_fixtures(now)
+    blocks, metadata, fallback = _build_daily(now, fixtures)
     posted = False
-    if SLACK_WEBHOOK_URL:
+    if SLACK_BOT_TOKEN and SLACK_CHANNEL_ID:
         try:
-            posted = await trivia.post_to_slack(message, SLACK_WEBHOOK_URL)
+            await slack_poll.post_message(
+                SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, blocks, fallback, metadata
+            )
+            posted = True
         except Exception as exc:
             log.error("Slack post failed: %s", exc)
             raise HTTPException(status_code=502, detail="Slack post failed") from exc
     else:
-        log.warning("SLACK_WEBHOOK_URL not set — message composed but not posted")
-    return {"posted": posted, "message": message}
+        log.warning("SLACK_BOT_TOKEN/SLACK_CHANNEL_ID not set — composed but not posted")
+    return {"posted": posted, "blocks": blocks}
+
+
+async def _handle_vote(payload: dict) -> None:
+    try:
+        action = payload["actions"][0]
+        value = json.loads(action["value"])
+        game_id, pick = value["game_id"], value["pick"]
+        user_id = payload["user"]["id"]
+        channel = payload["channel"]["id"]
+        ts = payload["message"]["ts"]
+        meta = payload["message"].get("metadata") or {}
+        state = meta.get("event_payload") or {}
+        now = datetime.now(tz=timezone.utc)
+        state, changed, error = slack_poll.apply_vote(state, game_id, user_id, pick, now)
+        if error == "closed":
+            await slack_poll.send_ephemeral(
+                payload["response_url"],
+                "⏱️ Voting's closed for this one — it already kicked off.",
+            )
+            return
+        if not changed:
+            return
+        blocks = slack_poll.build_message_blocks(state, now)
+        await slack_poll.update_message(
+            SLACK_BOT_TOKEN, channel, ts, blocks, "Prediction poll updated",
+            {"event_type": "wc_prediction_poll", "event_payload": state},
+        )
+    except Exception as exc:
+        log.error("Vote handling failed (user=%s): %s", (payload.get("user") or {}).get("id"), exc)
+
+
+@app.post("/api/slack/interactions")
+async def slack_interactions(request: Request, background: BackgroundTasks) -> dict:
+    body = (await request.body()).decode()
+    now = datetime.now(tz=timezone.utc)
+    if not slack_poll.verify_slack_signature(
+        SLACK_SIGNING_SECRET,
+        request.headers.get("X-Slack-Request-Timestamp", ""),
+        body,
+        request.headers.get("X-Slack-Signature", ""),
+        now,
+    ):
+        raise HTTPException(status_code=401, detail="bad signature")
+    parsed = urllib.parse.parse_qs(body)
+    payload = json.loads(parsed.get("payload", ["{}"])[0])
+    background.add_task(_handle_vote, payload)
+    return {}
 
 
 # ---------------------------------------------------------------------------

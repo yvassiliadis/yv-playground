@@ -1,4 +1,3 @@
-import asyncio
 from datetime import date, datetime, timezone
 
 import trivia
@@ -51,89 +50,34 @@ def test_did_you_know_count_returns_distinct_facts():
     assert picks[0]["id"] != picks[1]["id"]
 
 
-def test_on_this_day_from_file_june_27_is_battle_of_bern():
-    dated, _ = trivia.partition_facts(trivia.load_facts())
-    hits = trivia.on_this_day_from_file(dated, date(2026, 6, 27))
-    assert len(hits) == 1
-    assert hits[0]["year"] == 1954
-    assert "Battle of Bern" in hits[0]["fact"]
+def test_days_to_final_counts_down():
+    from datetime import datetime, timezone
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)  # 18 days before Jul 19 19:00Z
+    assert trivia.days_to_final(now) == 18
 
 
-def test_on_this_day_from_file_empty_when_no_match():
-    dated, _ = trivia.partition_facts(trivia.load_facts())
-    # Jan 1 has no dated fact in the curated set
-    assert trivia.on_this_day_from_file(dated, date(2026, 1, 1)) == []
+def test_days_to_final_clamps_to_zero_after_final():
+    from datetime import datetime, timezone
+    after = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    assert trivia.days_to_final(after) == 0
 
 
-def test_phrase_match_formats_result_with_endash():
-    m = {
-        "homeTeam": "Sweden", "awayTeam": "Italy", "score": "3-2",
-        "stage": "group_3", "city": "São Paulo",
-    }
-    assert trivia.phrase_match(m) == "Sweden 3–2 Italy (group 3, São Paulo)"
+def test_trivia_blocks_has_title_fact_and_days_countdown():
+    from datetime import datetime, timezone
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks, fallback = trivia.trivia_blocks(now)
+    texts = [b["text"]["text"] for b in blocks if b.get("type") == "section"]
+    assert any("Did You Know?" in t for t in texts)
+    assert any("💡" in t for t in texts)
+    assert any("days until the 2026 World Cup Final" in t for t in texts)
+    assert "Scopee's Challenge" in texts[-1]
+    assert "Did You Know?" in fallback
 
 
-def test_select_on_this_day_prefers_file_and_skips_api():
-    dated, _ = trivia.partition_facts(trivia.load_facts())
-    # api_key intentionally bogus; file match for 06-27 means API is never called
-    hits = asyncio.run(trivia.select_on_this_day(dated, date(2026, 6, 27), "bogus"))
-    assert len(hits) == 1
-    assert "Battle of Bern" in hits[0]["fact"]
-
-
-def test_select_on_this_day_no_key_no_file_returns_empty():
-    dated, _ = trivia.partition_facts(trivia.load_facts())
-    hits = asyncio.run(trivia.select_on_this_day(dated, date(2026, 1, 1), ""))
-    assert hits == []
-
-
-def test_minutes_to_final_known_value():
-    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
-    assert trivia.minutes_to_final(now) == 31980
-
-
-def test_minutes_to_final_clamps_to_zero_after_final():
-    now = datetime(2026, 8, 1, 0, 0, tzinfo=timezone.utc)
-    assert trivia.minutes_to_final(now) == 0
-
-
-def test_compose_message_has_all_sections_in_order():
-    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
-    dyk = [{"id": "x", "fact": "Fact one."}]
-    otd = [{"year": 1954, "fact": "Battle of Bern stuff."}]
-    msg = trivia.compose_message(dyk, otd, now)
-    assert msg.startswith("*Did You Know? ⚽*")
-    assert "💡 Fact one." in msg
-    assert "🗓️ *On this exact day, 1954:* Battle of Bern stuff." in msg
-    assert "31,980 minutes until the 2026 World Cup Final." in msg
-    assert "<http://tinyurl.com/scopee-wc2026|Scopee's Challenge>" in msg
-    # countdown is the last line
-    assert msg.strip().splitlines()[-1].startswith("⏱️")
-
-
-def test_compose_message_second_otd_uses_also_in():
-    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
-    otd = [
-        {"year": 1958, "fact": "First."},
-        {"year": 1986, "fact": "Second."},
-    ]
-    msg = trivia.compose_message([{"id": "x", "fact": "F."}], otd, now)
-    assert "🗓️ *On this exact day, 1958:* First." in msg
-    assert "🗓️ *Also in 1986:* Second." in msg
-
-
-def test_build_daily_post_june_27_contains_known_picks():
-    now = datetime(2026, 6, 27, 14, 0, tzinfo=timezone.utc)
-    msg = asyncio.run(trivia.build_daily_post(now, ""))
-    # most-goals-per-match (1954) is the deterministic DYK pick; Battle of Bern is the file on-this-day
-    assert "5.38" in msg
-    assert "Battle of Bern" in msg
-    assert "minutes until the 2026 World Cup Final" in msg
-
-
-def test_build_daily_post_thin_day_has_two_did_you_knows():
-    # Jan 1: no on-this-day fact and no api key -> fall back to 2 did-you-knows
-    now = datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc)
-    msg = asyncio.run(trivia.build_daily_post(now, ""))
-    assert msg.count("💡 ") == 2
-    assert "🗓️" not in msg
+def test_trivia_blocks_has_no_calendar_lines():
+    from datetime import datetime, timezone
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks, _ = trivia.trivia_blocks(now)
+    texts = " ".join(b["text"]["text"] for b in blocks if b.get("type") == "section")
+    assert "On this exact day" not in texts
+    assert "Also in" not in texts
