@@ -1,5 +1,6 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import json
 
 ET = ZoneInfo("America/New_York")
 
@@ -94,3 +95,65 @@ def apply_vote(
     # rely on the pre-call state staying unchanged.
     game["votes"][user_id] = pick
     return state, True, None
+
+
+POLL_HEADER = "⚽ *Today's predictions — who ya got?*"
+
+
+def _kickoff_label(kickoff_utc: str) -> str:
+    ko = datetime.fromisoformat(kickoff_utc.replace("Z", "+00:00")).astimezone(ET)
+    return ko.strftime("%-I:%M%p").lower() + " ET"
+
+
+def _voter_line(game: dict) -> str:
+    votes = game["votes"]
+    home = [u for u, p in votes.items() if p == "home"]
+    away = [u for u, p in votes.items() if p == "away"]
+    parts = []
+    if home:
+        parts.append(f"{game['home']} — " + ", ".join(f"<@{u}>" for u in home))
+    if away:
+        parts.append(f"{game['away']} — " + ", ".join(f"<@{u}>" for u in away))
+    return " · ".join(parts) if parts else "_no votes yet_"
+
+
+def _button(game_id: str, pick: str, label: str) -> dict:
+    return {
+        "type": "button",
+        "text": {"type": "plain_text", "text": label, "emoji": True},
+        "action_id": f"vote_{game_id}_{pick}",
+        "value": json.dumps({"game_id": game_id, "pick": pick}),
+    }
+
+
+def poll_blocks(games: dict, now: datetime) -> list[dict]:
+    if not games:
+        return []
+    blocks: list[dict] = [
+        {"type": "divider"},
+        {"type": "section", "text": {"type": "mrkdwn", "text": POLL_HEADER}},
+    ]
+    for game_id, game in games.items():
+        fh, fa = flag(game["home"]), flag(game["away"])
+        title = (
+            f"*{(fh + ' ') if fh else ''}{game['home']}  vs  "
+            f"{(fa + ' ') if fa else ''}{game['away']}*  · kickoff {_kickoff_label(game['kickoff_utc'])}"
+        )
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": title}})
+        blocks.append({
+            "type": "actions",
+            "block_id": f"poll_{game_id}",
+            "elements": [
+                _button(game_id, "home", game["home"]),
+                _button(game_id, "away", game["away"]),
+            ],
+        })
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": _voter_line(game)}],
+        })
+    return blocks
+
+
+def build_message_blocks(state: dict, now: datetime) -> list[dict]:
+    return list(state.get("header_blocks", [])) + poll_blocks(state.get("games", {}), now)

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 import slack_poll
 
@@ -90,3 +91,56 @@ def test_apply_vote_unknown_game():
     now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     state, changed, error = slack_poll.apply_vote(_state(now), "999", "U1", "home", now)
     assert changed is False and error == "unknown"
+
+
+def _game_state(votes):
+    return {
+        "header_blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "*hdr*"}}],
+        "games": {
+            "1": {"home": "Mexico", "away": "Ecuador",
+                  "kickoff_utc": "2026-07-01T19:00:00Z", "votes": votes},
+        },
+    }
+
+
+def test_poll_blocks_has_two_buttons_with_encoded_values():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks = slack_poll.poll_blocks(_game_state({})["games"], now)
+    actions = [b for b in blocks if b["type"] == "actions"][0]
+    assert len(actions["elements"]) == 2
+    home_btn = actions["elements"][0]
+    assert home_btn["action_id"] == "vote_1_home"
+    assert json.loads(home_btn["value"]) == {"game_id": "1", "pick": "home"}
+
+
+def test_poll_blocks_no_votes_shows_placeholder():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks = slack_poll.poll_blocks(_game_state({})["games"], now)
+    context = [b for b in blocks if b["type"] == "context"][0]
+    assert "no votes yet" in context["elements"][0]["text"]
+
+
+def test_poll_blocks_renders_voter_mentions():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks = slack_poll.poll_blocks(_game_state({"U1": "home", "U2": "away"})["games"], now)
+    context = [b for b in blocks if b["type"] == "context"][0]["elements"][0]["text"]
+    assert "<@U1>" in context and "<@U2>" in context
+
+
+def test_poll_blocks_empty_when_no_games():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    assert slack_poll.poll_blocks({}, now) == []
+
+
+def test_build_message_blocks_prepends_header():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    blocks = slack_poll.build_message_blocks(_game_state({}), now)
+    assert blocks[0]["text"]["text"] == "*hdr*"
+    assert any(b["type"] == "actions" for b in blocks)
+
+
+def test_build_message_blocks_header_only_when_no_games():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    state = {"header_blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "*hdr*"}}], "games": {}}
+    blocks = slack_poll.build_message_blocks(state, now)
+    assert blocks == state["header_blocks"]
