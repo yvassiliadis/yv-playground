@@ -90,5 +90,7 @@ def apply_vote(
         return state, False, "closed"
     if game["votes"].get(user_id) == pick:
         return state, False, None
+    # Mutates state in place and returns the same object; callers must not
+    # rely on the pre-call state staying unchanged.
     game["votes"][user_id] = pick
     return state, True, None
