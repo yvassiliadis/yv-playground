@@ -61,3 +61,34 @@ def todays_fixtures(matches: list[dict], now: datetime) -> list[dict]:
         })
     out.sort(key=lambda g: g["kickoff_utc"])
     return out
+
+
+def initial_poll_state(fixtures: list[dict], now: datetime, header_blocks: list[dict]) -> dict:
+    return {
+        "date": now.astimezone(ET).date().isoformat(),
+        "header_blocks": header_blocks,
+        "games": {
+            f["game_id"]: {
+                "home": f["home"],
+                "away": f["away"],
+                "kickoff_utc": f["kickoff_utc"],
+                "votes": {},
+            }
+            for f in fixtures
+        },
+    }
+
+
+def apply_vote(
+    state: dict, game_id: str, user_id: str, pick: str, now: datetime
+) -> tuple[dict, bool, str | None]:
+    game = state.get("games", {}).get(game_id)
+    if game is None:
+        return state, False, "unknown"
+    kickoff = datetime.fromisoformat(game["kickoff_utc"].replace("Z", "+00:00"))
+    if now >= kickoff:
+        return state, False, "closed"
+    if game["votes"].get(user_id) == pick:
+        return state, False, None
+    game["votes"][user_id] = pick
+    return state, True, None
