@@ -1,5 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import hashlib
+import hmac
 import json
 
 ET = ZoneInfo("America/New_York")
@@ -157,3 +159,19 @@ def poll_blocks(games: dict, now: datetime) -> list[dict]:
 
 def build_message_blocks(state: dict, now: datetime) -> list[dict]:
     return list(state.get("header_blocks", [])) + poll_blocks(state.get("games", {}), now)
+
+
+def verify_slack_signature(
+    signing_secret: str, timestamp: str, body: str, signature: str, now: datetime
+) -> bool:
+    if not signing_secret:
+        return False
+    try:
+        ts = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+    if abs(int(now.timestamp()) - ts) > 300:
+        return False
+    base = f"v0:{timestamp}:{body}".encode()
+    digest = hmac.new(signing_secret.encode(), base, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(f"v0={digest}", signature or "")

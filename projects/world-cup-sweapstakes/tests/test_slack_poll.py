@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import hashlib
+import hmac
 import json
 
 import slack_poll
@@ -151,3 +153,31 @@ def test_poll_blocks_section_shows_kickoff_time():
     blocks = slack_poll.poll_blocks(_game_state({})["games"], now)
     section = [b for b in blocks if b["type"] == "section" and "kickoff" in b["text"]["text"]][0]
     assert "3:00pm ET" in section["text"]["text"]
+
+
+def _sign(secret, ts, body):
+    base = f"v0:{ts}:{body}".encode()
+    return "v0=" + hmac.new(secret.encode(), base, hashlib.sha256).hexdigest()
+
+
+def test_verify_signature_accepts_valid():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    ts = str(int(now.timestamp()))
+    body = "payload=%7B%7D"
+    sig = _sign("shhh", ts, body)
+    assert slack_poll.verify_slack_signature("shhh", ts, body, sig, now) is True
+
+
+def test_verify_signature_rejects_tampered_body():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    ts = str(int(now.timestamp()))
+    sig = _sign("shhh", ts, "payload=%7B%7D")
+    assert slack_poll.verify_slack_signature("shhh", ts, "payload=EVIL", sig, now) is False
+
+
+def test_verify_signature_rejects_stale_timestamp():
+    now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    old_ts = str(int(now.timestamp()) - 600)
+    body = "payload=%7B%7D"
+    sig = _sign("shhh", old_ts, body)
+    assert slack_poll.verify_slack_signature("shhh", old_ts, body, sig, now) is False
