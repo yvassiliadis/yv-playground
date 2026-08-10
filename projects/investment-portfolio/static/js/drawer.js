@@ -37,8 +37,9 @@ export function openDrawer(holding, run = null) {
   document.getElementById('d-members').innerHTML = (d.nominated_by || []).map(m => `
     <div class="member-chip"><img src="/static/${m.toLowerCase()}.png" class="member-thumb" alt="${m.toLowerCase()}">${MEMBER_NAMES[m.toLowerCase()] || m}</div>`).join('');
 
-  const investAmt = Math.round(10000 * (d.weight / 100));
-  document.getElementById('d-invest').textContent = `Recommended investment: $${investAmt.toLocaleString()} of $10,000`;
+  const totalAmount = run?.investment_amount ?? 10000;
+  const investAmt = Math.round(totalAmount * (d.weight / 100));
+  document.getElementById('d-invest').textContent = `Recommended investment: $${investAmt.toLocaleString()} of $${totalAmount.toLocaleString()}`;
 
   document.getElementById('d-rationale').textContent = d.rationale;
 
