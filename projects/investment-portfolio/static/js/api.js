@@ -14,7 +14,7 @@ async function request(method, path, body) {
 export const api = {
   getLatestRun:     ()       => request('GET',  '/api/runs/latest'),
   getAllRuns:        ()       => request('GET',  '/api/runs'),
-  triggerRun:       ()       => request('POST', '/api/runs'),
+  triggerRun:       (investmentAmount) => request('POST', '/api/runs', investmentAmount != null ? { investment_amount: investmentAmount } : undefined),
   getPerformance:   (t, w)   => request('GET',  `/api/performance?tickers=${t}&weights=${w}`),
   getAdvisorLog:    ()       => request('GET',  '/api/advisor/log'),
   askAdvisor:       (ticker) => request('POST', '/api/advisor', { ticker }),

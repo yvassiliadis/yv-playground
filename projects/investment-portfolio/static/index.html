@@ -85,6 +85,21 @@
   </div>
 </div>
 
+<!-- Run Committee amount modal -->
+<div id="run-amount-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-2);border:1px solid var(--border-bright);border-radius:10px;padding:32px;min-width:360px;max-width:440px;">
+    <div style="font-family:var(--font-serif);font-size:1.2rem;font-weight:600;color:var(--text);margin-bottom:20px;">How much are you investing?</div>
+    <div style="margin-bottom:20px;">
+      <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-3);display:block;margin-bottom:6px;">Investment Amount ($)</label>
+      <input id="run-amount-input" class="settings-input" type="number" min="1" step="1" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button id="run-amount-confirm" class="settings-btn primary" style="flex:1;">Run Committee</button>
+      <button id="run-amount-cancel" class="settings-btn" style="flex:1;">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Loading overlay -->
 <div class="loading-overlay" id="loading">
   <div class="loading-spinner"></div>
