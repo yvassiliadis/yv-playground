@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Pick(BaseModel):
@@ -42,7 +42,7 @@ class CommitteeRun(BaseModel):
     gemini_picks: list[Pick] = []
     portfolio: list[PortfolioHolding]
     claude_sources: list[WebSource] = []
-    investment_amount: float = 10000.0
+    investment_amount: float = Field(default=10000.0, gt=0)
 
 
 class AdvisorResponse(BaseModel):

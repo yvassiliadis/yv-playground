@@ -102,6 +102,7 @@ async function runCommittee(investmentAmount) {
     await refreshPortfolio(latestRun);
     initPerformance(latestRun);
     initTracker(latestRun);
+    await initResearch();
     showToast('Committee run complete!');
   } catch (e) {
     showToast(e.message, 'error');
