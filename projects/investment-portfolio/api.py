@@ -65,9 +65,10 @@ async def get_latest_run():
 
 
 @app.post("/api/runs")
-async def trigger_run():
+async def trigger_run(payload: dict | None = None):
+    investment_amount = (payload or {}).get("investment_amount", 10000.0)
     ac, oc, gc = _clients()
-    run = await run_committee(ac, oc, gc)
+    run = await run_committee(ac, oc, gc, investment_amount=investment_amount)
     return run.model_dump(mode="json")
 
 
