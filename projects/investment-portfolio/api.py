@@ -1,6 +1,7 @@
 # Run: uv run uvicorn api:app --reload --port 8000
 # Then open http://localhost:8000
 
+import logging
 import os
 
 import anthropic
@@ -14,9 +15,12 @@ from openai import AsyncOpenAI
 from src import advisor_log, demo, portfolios
 from src import config as exclusions
 from src.advisor import ask_committee
+from src.enrichment import get_live_quote
 from src.models import TrackedPortfolio
 from src.performance import portfolio_vs_benchmarks, tracked_portfolios_performance
 from src.runner import load_all_runs, load_latest_run, run_committee
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 exclusions.load()
@@ -104,6 +108,15 @@ async def get_advisor_opinion(payload: dict):
 @app.get("/api/advisor/log")
 async def get_advisor_log():
     return advisor_log.load()
+
+
+@app.get("/api/quote/{ticker}")
+async def get_quote(ticker: str):
+    try:
+        return await get_live_quote(ticker.upper())
+    except Exception:
+        logger.warning("Failed to fetch live quote for %s", ticker, exc_info=True)
+        return {"current_price": None, "mean_upside_pct": None, "median_upside_pct": None}
 
 
 @app.get("/api/settings")
