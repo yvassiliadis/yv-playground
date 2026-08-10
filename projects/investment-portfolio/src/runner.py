@@ -102,6 +102,7 @@ async def run_committee(
     anthropic_client: anthropic.AsyncAnthropic,
     openai_client: AsyncOpenAI,
     gemini_client: genai.Client,
+    investment_amount: float = 10000.0,
 ) -> CommitteeRun:
     screened = await screen_universe()
     screened_section = format_for_prompt(screened)
@@ -225,6 +226,7 @@ async def run_committee(
         gemini_picks=gemini_picks,
         portfolio=portfolio,
         claude_sources=claude_sources,
+        investment_amount=investment_amount,
     )
 
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
