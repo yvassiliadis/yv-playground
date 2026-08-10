@@ -42,6 +42,7 @@ class CommitteeRun(BaseModel):
     gemini_picks: list[Pick] = []
     portfolio: list[PortfolioHolding]
     claude_sources: list[WebSource] = []
+    investment_amount: float = 10000.0
 
 
 class AdvisorResponse(BaseModel):
