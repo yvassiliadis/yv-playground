@@ -20,6 +20,7 @@ export const api = {
   askAdvisor:       (ticker) => request('POST', '/api/advisor', { ticker }),
   getSettings:      ()       => request('GET',  '/api/settings'),
   updateSettings:   (data)   => request('PUT',  '/api/settings', data),
+  getQuote:         (ticker)   => request('GET',  `/api/quote/${encodeURIComponent(ticker)}`),
   getPortfolios:            ()           => request('GET',    '/api/portfolios'),
   savePortfolios:           (data)       => request('PUT',    '/api/portfolios', data),
   deletePortfolio:          (name)       => request('DELETE', `/api/portfolios/${encodeURIComponent(name)}`),

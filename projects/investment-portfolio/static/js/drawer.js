@@ -1,4 +1,13 @@
+import { api } from './api.js';
+
 const MEMBER_NAMES = { claude: 'Claude', gpt: 'GPT-4o', gemini: 'Gemini' };
+
+let _openTicker = null;
+
+function applyUpsideClass(el, val) {
+  el.classList.remove('pos', 'neg');
+  if (val != null) el.classList.add(val >= 0 ? 'pos' : 'neg');
+}
 
 export function openDrawer(holding, run = null) {
   const d = holding;
@@ -15,24 +24,34 @@ export function openDrawer(holding, run = null) {
     <span class="pill weight">${d.weight}% weight</span>
     ${consPill}`;
 
-  const uCls  = (d.mean_upside_pct ?? 0) >= 0 ? 'pos' : 'neg';
-  const uSign = (d.mean_upside_pct ?? 0) >= 0 ? '+' : '';
-  const mSign = (d.median_upside_pct ?? 0) >= 0 ? '+' : '';
-  const mCls  = (d.median_upside_pct ?? 0) >= 0 ? 'pos' : 'neg';
-  const priceStr = d.current_price != null ? '$' + d.current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  _openTicker = d.ticker;
+
+  const frozenPriceStr = d.current_price != null
+    ? '$' + d.current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+  const frozenMeanCls    = d.mean_upside_pct != null   ? (d.mean_upside_pct >= 0 ? 'pos' : 'neg')   : '';
+  const frozenMedianCls  = d.median_upside_pct != null ? (d.median_upside_pct >= 0 ? 'pos' : 'neg') : '';
+  const frozenMeanStr    = d.mean_upside_pct != null   ? (d.mean_upside_pct >= 0 ? '+' : '')   + d.mean_upside_pct.toFixed(1)   + '%' : '—';
+  const frozenMedianStr  = d.median_upside_pct != null ? (d.median_upside_pct >= 0 ? '+' : '') + d.median_upside_pct.toFixed(1) + '%' : '—';
+
   document.getElementById('d-upside').innerHTML = `
     <div class="upside-card">
       <div class="upside-card-label">Current Price</div>
-      <div class="upside-card-val">${priceStr}</div>
+      <div class="upside-card-val" id="d-price-live">…</div>
+      <div class="upside-card-sub">${frozenPriceStr}</div>
     </div>
     <div class="upside-card">
       <div class="upside-card-label">Mean Target</div>
-      <div class="upside-card-val ${uCls}">${d.mean_upside_pct != null ? uSign + d.mean_upside_pct.toFixed(1) + '%' : '—'}</div>
+      <div class="upside-card-val" id="d-mean-live">…</div>
+      <div class="upside-card-sub ${frozenMeanCls}">${frozenMeanStr}</div>
     </div>
     <div class="upside-card">
       <div class="upside-card-label">Median Target</div>
-      <div class="upside-card-val ${mCls}">${d.median_upside_pct != null ? mSign + d.median_upside_pct.toFixed(1) + '%' : '—'}</div>
+      <div class="upside-card-val" id="d-median-live">…</div>
+      <div class="upside-card-sub ${frozenMedianCls}">${frozenMedianStr}</div>
     </div>`;
+
+  fetchLiveQuote(d.ticker);
 
   document.getElementById('d-members').innerHTML = (d.nominated_by || []).map(m => `
     <div class="member-chip"><img src="/static/${m.toLowerCase()}.png" class="member-thumb" alt="${m.toLowerCase()}">${MEMBER_NAMES[m.toLowerCase()] || m}</div>`).join('');
@@ -79,4 +98,33 @@ export function initDrawer() {
   document.getElementById('d-close').addEventListener('click', closeDrawer);
   document.getElementById('backdrop').addEventListener('click', closeDrawer);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+}
+
+async function fetchLiveQuote(ticker) {
+  let quote;
+  try {
+    quote = await api.getQuote(ticker);
+  } catch (e) {
+    quote = { current_price: null, mean_upside_pct: null, median_upside_pct: null };
+  }
+  if (_openTicker !== ticker) return;
+
+  const priceEl  = document.getElementById('d-price-live');
+  const meanEl   = document.getElementById('d-mean-live');
+  const medianEl = document.getElementById('d-median-live');
+  if (!priceEl) return;
+
+  priceEl.textContent = quote.current_price != null
+    ? '$' + quote.current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+
+  meanEl.textContent = quote.mean_upside_pct != null
+    ? (quote.mean_upside_pct >= 0 ? '+' : '') + quote.mean_upside_pct.toFixed(1) + '%'
+    : '—';
+  applyUpsideClass(meanEl, quote.mean_upside_pct);
+
+  medianEl.textContent = quote.median_upside_pct != null
+    ? (quote.median_upside_pct >= 0 ? '+' : '') + quote.median_upside_pct.toFixed(1) + '%'
+    : '—';
+  applyUpsideClass(medianEl, quote.median_upside_pct);
 }
