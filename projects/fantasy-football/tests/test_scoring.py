@@ -137,6 +137,26 @@ def test_score_does_not_double_count_two_snapshots_of_the_same_season():
     assert doubled == single
 
 
+def test_score_does_not_double_count_two_runs_on_the_same_day():
+    """`ffdraft ingest actuals` run twice in one day writes rows that tie at
+    the max `snapshot_date`; the max-filter alone keeps both, so the dedupe
+    has to collapse the tie too."""
+    one_run = pl.DataFrame(
+        [
+            _snapshot_row("2025-08-01", "passing yard", 4000.0),
+            _snapshot_row("2025-08-01", "passing td", 30.0),
+        ]
+    )
+    two_runs_same_day = pl.concat([one_run, one_run])
+
+    single = scoring.score(one_run, RULES)["fantasy_points"][0]
+    doubled = scoring.score(two_runs_same_day, RULES)["fantasy_points"][0]
+
+    assert single == 4000.0 * 0.04 + 30.0 * 6.0
+    assert doubled == single
+    assert scoring.latest_snapshot_rows(two_runs_same_day).height == 2
+
+
 def test_score_uses_the_latest_snapshot_not_the_first():
     df = pl.DataFrame(
         [

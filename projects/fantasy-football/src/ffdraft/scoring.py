@@ -20,8 +20,9 @@ season's file. Any consumer that globs those files and sums gets one copy of
 every stat *per snapshot run*, so a second snapshot of the same season and
 source silently doubles every scored total. `score()` therefore runs
 `latest_snapshot_rows()` over its input first: within each
-`(season, week, source, player_id, stat_name)` group only the newest
-`snapshot_date` survives. Because `score()` is the single scoring path for
+`(season, week, source, player_id, stat_name)` group exactly one row -- the
+newest `snapshot_date`, and only one row even when several tie at that date
+(two runs on the same day) -- survives. Because `score()` is the single scoring path for
 projections, actuals, and derived rows alike, doing it here fixes every
 consumer at once (`model.blend._wide_projections`,
 `model.calibrate._seasonal_totals`, `metrics.consistency.compute_consistency`)
@@ -53,6 +54,15 @@ def latest_snapshot_rows(df: pl.DataFrame) -> pl.DataFrame:
     the ISO `YYYY-MM-DD` strings and the `datetime.date` values the ingest
     modules write.
 
+    The max-`snapshot_date` filter alone is not enough: two ingest runs on
+    the *same* day produce rows that tie at the max and both survive. A
+    trailing `unique(subset=key)` therefore collapses each key group to a
+    single row, so a same-day re-run cannot double-count either. Within a
+    tie the surviving row is the first in input order, which is the right
+    choice precisely because tied rows are duplicates of one fact -- if
+    their `stat_value`s somehow differ, one of the two runs is wrong and
+    there is no information in the frame to say which.
+
     No-ops on a frame without a `snapshot_date` column (e.g. `derive.py`'s
     synthesised DST frame), and on an empty frame. Rows whose
     `snapshot_date` is null are kept only if *every* row in their group is
@@ -67,7 +77,9 @@ def latest_snapshot_rows(df: pl.DataFrame) -> pl.DataFrame:
     # `fill_null` on a sentinel that sorts below every real date keeps
     # all-null groups intact while letting a real date win over a null one.
     stamp = pl.col("snapshot_date").cast(pl.String).fill_null("")
-    return df.filter(stamp == stamp.max().over(key))
+    return df.filter(stamp == stamp.max().over(key)).unique(
+        subset=key, keep="first", maintain_order=True
+    )
 
 
 def load_scoring_rules(path: Path) -> dict[str, float]:
