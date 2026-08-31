@@ -6,6 +6,8 @@ import polars as pl
 import typer
 
 from ffdraft import scoring
+from ffdraft.board import BOARD_COLUMNS, build_board
+from ffdraft.config import TEAMS
 from ffdraft.ingest.actuals import load_dst_actuals, load_weekly_actuals
 from ffdraft.ingest.archives import load_ffa_archives, load_ffdp_archives
 from ffdraft.ingest.snapshot import run_snapshot
@@ -170,6 +172,80 @@ def model_calibrate(
     )
     calibrate_module.print_loso_table(loso_df)
     typer.echo(f"Wrote {weights_df.height} position weight rows to {out}")
+
+
+@app.command()
+def board(
+    projections: Path = typer.Option(
+        ...,
+        "--projections",
+        help="Parquet of canonical long-schema projections for the season "
+        "being drafted (multiple sources).",
+    ),
+    adp: Path = typer.Option(
+        ...,
+        "--adp",
+        help="Parquet or CSV of average-draft-position data: player_id, "
+        "position, adp columns. No ingestion task builds this yet, so it "
+        "must be sourced separately (e.g. a manually maintained file).",
+    ),
+    actuals: Path = typer.Option(
+        ...,
+        "--actuals",
+        help="Parquet of canonical long-schema weekly actuals (single "
+        "source) for the consistency metrics' historical window.",
+    ),
+    consistency_seasons: str = typer.Option(
+        ...,
+        "--consistency-seasons",
+        help="Season range or comma-separated list to compute consistency "
+        "over, e.g. 2023-2024 or 2023,2024.",
+    ),
+    weights: Path = typer.Option(
+        calibrate_module.DEFAULT_SOURCE_WEIGHTS_PATH,
+        "--weights",
+        help="Fitted per-position source weights from `model calibrate`.",
+    ),
+    scoring_rules: Path = typer.Option(
+        SCORING_RULES_PATH, "--scoring-rules", help="Scoring rules CSV."
+    ),
+    teams: int = typer.Option(TEAMS, "--teams", help="League size."),
+    out: Path = typer.Option(..., "--out", help="Where to write the board CSV."),
+) -> None:
+    """Build the ranked draft board and write it to CSV, printing it too."""
+    rules = scoring.load_scoring_rules(scoring_rules)
+    board_df = build_board(
+        projections=pl.read_parquet(projections),
+        weights_path=weights,
+        adp=pl.read_parquet(adp) if adp.suffix == ".parquet" else pl.read_csv(adp),
+        weekly_actuals=pl.read_parquet(actuals),
+        consistency_seasons=_parse_seasons(consistency_seasons),
+        rules=rules,
+        teams=teams,
+    )
+
+    board_df.write_csv(out)
+
+    from rich.console import Console
+    from rich.table import Table
+
+    table = Table(title="Draft board")
+    for column in BOARD_COLUMNS:
+        table.add_column(column, justify="right" if column != "player" else "left")
+
+    for row in board_df.iter_rows(named=True):
+        table.add_row(*(_format_board_cell(row[column]) for column in BOARD_COLUMNS))
+
+    Console().print(table)
+    typer.echo(f"Wrote {board_df.height} board rows to {out}")
+
+
+def _format_board_cell(value: object) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    return str(value)
 
 
 if __name__ == "__main__":
