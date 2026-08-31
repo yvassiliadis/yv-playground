@@ -1,6 +1,5 @@
 # Data directories (but preserve .gitkeep files for structure)
 data/raw/*
-!data/raw/.gitkeep
 !data/raw/projections/.gitkeep
 !data/raw/actuals/.gitkeep
 data/historical/*
