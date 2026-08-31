@@ -1,36 +1,37 @@
 """CBS Sports seasonal projections source.
 
-**Best-effort synthetic -- NOT verified against live markup.** This task's
-brief assumed no live network access would be available in this
-environment, and for CBS that assumption held in practice even though the
-network itself is reachable: an outbound `curl` to
-`cbssports.com/fantasy/football/stats/<POS>/<season>/season/projections/nonppr/`
-returns a real 200 with the correct page `<title>` ("2026 Projections
-Fantasy Football Stats - QB Points - CBS Sports"), but the response body
-has **zero** `<table>` elements and no player names anywhere in the static
-HTML (checked directly -- `"Josh"` doesn't appear in the response at all).
-CBS Sports' stats pages are a client-side-rendered React app; the actual
-projection table is populated by a JS-executed API call this environment's
-plain `httpx` GET can't trigger or discover (no embedded JSON blob,
-`__NEXT_DATA__`, or inline `<script type="application/json">` payload was
-found in the response either).
+**Live-verified.** The real page markup was found by reading the R
+`ffanalytics` package's own `scrape_cbs()` source (it has scraped this site
+for years) and confirming its URL and selectors live:
+`cbssports.com/fantasy/football/stats/<POS>/<season>/restofseason/projections/nonppr/`
+returns a real, server-rendered `<table id="TableBase">` with genuine player
+rows for QB/RB/WR/TE (K and DST have a real table too but a messier column
+layout -- e.g. K's row cells shift when the "Longest Field Goal" value is a
+literal em-dash -- and are left out of this task's scope; a future task can
+extend `_POSITION_PATH` once that's handled).
 
-Absent a live sample to parse, this parser is written against the
-conceptual shape of CBS's classic server-rendered fantasy stats table
-(before their front-end migrated to the current React app) -- a
-`<table>` with one `<tr>` per player, a leading cell holding the player's
-name as anchor text with the team abbreviation as trailing text in the same
-cell (`"Josh Allen BUF"`-style, split the same way
-`ids.crosswalk`-adjacent sources like FantasyPros split theirs), followed by
-positional stat columns. This is a **plausible, not confirmed**, structure;
-`tests/fixtures/sources/cbs/sample_<pos>.html` is a hand-authored fixture
-built to exercise this parser, not a captured real response.
+**Important, confirmed by direct testing:** the `<season>` and week path
+segments are silently ignored by CBS's current site -- `.../QB/2018/1/...`
+and `.../QB/2023/restofseason/...` return byte-identical, always-current
+data. This source is therefore only useful for the live/current season;
+there is no way to pull CBS's historical archives through this endpoint
+(confirmed by comparing three season/week combinations and finding them
+byte-for-byte identical). Do not build a `CBSSource`-based historical
+loader on this URL.
 
-If CBS's current React-rendered page is to be scraped for real, the
-prerequisite is finding CBS's underlying JSON API endpoint the React app
-calls (visible only via a browser's network tab, not reachable via a plain
-HTTP client) -- that's out of scope for what could be determined in this
-task.
+Each header `<th>` cell's text is the short code and the long display name
+concatenated with a single space (e.g. `"yds Passing Yards"`) -- splitting
+on the first space and looking up the remainder in `_COLUMN_LABELS` gives a
+reliable, header-driven column mapping rather than a positional guess that
+would silently misalign if CBS ever reorders columns. This mapping (short
+internal key, and the exact long-label strings) was read directly from
+`ffanalytics:::cbs_columns` in the R package, not guessed.
+
+Player identity comes from `.CellPlayerName--long a`: its `href`
+(`/nfl/players/<id>/<slug>/fantasy/`) is CBS's own numeric player ID, which
+is exactly `ids.crosswalk.build_crosswalk()`'s `cbs_id` column (confirmed:
+Josh Allen's URL id `2181054` equals his `cbs_id` in the crosswalk) -- so
+this source joins by native ID like Sleeper/ESPN, not name-matching.
 """
 
 from __future__ import annotations
@@ -41,54 +42,83 @@ import re
 import polars as pl
 from bs4 import BeautifulSoup
 
-from ffdraft.ids.crosswalk import build_crosswalk, resolve_by_name
-from ffdraft.sources.base import CANONICAL_COLUMNS, make_http_client
+from ffdraft.ids.crosswalk import build_crosswalk
+from ffdraft.sources.base import (
+    CANONICAL_COLUMNS,
+    make_http_client,
+    resolve_player_id_by_native_id,
+)
 
 BASE_URL = "https://www.cbssports.com/fantasy/football/stats"
 
+# QB/RB/WR/TE only -- see module docstring for why K/DST are left out.
 _POSITION_PATH = {"QB": "QB", "RB": "RB", "WR": "WR", "TE": "TE"}
 
-# Player+team cell: "<Name> <TEAM>", a trailing all-caps 2-3 letter code,
-# mirroring FantasyPros' combined-cell format (see fantasypros.py).
-_TRAILING_TEAM_RE = re.compile(r"^(.*\S)\s+([A-Z]{2,3})$")
+_PLAYER_ID_RE = re.compile(r"/players/(\d+)/")
 
-# Per-position stat columns, positionally after the leading Player+Team
-# cell. UNVERIFIED against a live page -- see module docstring.
-_POSITION_COLUMNS: dict[str, list[str]] = {
-    "QB": [
-        "pass_att",
-        "pass_cmp",
-        "pass_yds",
-        "pass_td",
-        "int",
-        "rush_att",
-        "rush_yds",
-        "rush_td",
-        "fl",
-    ],
-    "RB": ["rush_att", "rush_yds", "rush_td", "rec", "rec_yds", "rec_td", "fl"],
-    "WR": ["rec", "rec_yds", "rec_td", "rush_att", "rush_yds", "rush_td", "fl"],
-    "TE": ["rec", "rec_yds", "rec_td", "fl"],
+# Long display label (as it appears in the header `<th>`, after the short
+# code) -> our internal key. Read directly from `ffanalytics:::cbs_columns`.
+_COLUMN_LABELS = {
+    "Games Played": "games",
+    "Pass Attempts": "pass_att",
+    "Pass Completions": "pass_comp",
+    "Passing Yards": "pass_yds",
+    "Passing Yards Per Game": "pass_yds_g",
+    "Touchdowns Passes": "pass_td",
+    "Interceptions Thrown": "pass_int",
+    "Passer Rating": "pass_rate",
+    "Rushing Attempts": "rush_att",
+    "Rushing Yards": "rush_yds",
+    "Average Yards Per Rush": "rush_avg",
+    "Rushing Touchdowns": "rush_td",
+    "Targets": "rec_tgt",
+    "Receptions": "rec",
+    "Receiving Yards": "rec_yds",
+    "Yards Per Game": "rec_yds_g",
+    "Average Yards Per Reception": "rec_avg",
+    "Receiving Touchdowns": "rec_td",
+    "Fumbles Lost": "fumbles_lost",
+    "Fantasy Points": "site_pts",
+    "Fantasy Points Per Game": "site_fppg",
 }
 
+# Internal key -> canonical stat_name (data/scoring_rules.csv vocabulary).
+# Attempts/completions/rate/per-game/targets have no scoring entry and are
+# read but not mapped, same convention as fftoday.py/fantasypros.py.
 _STAT_MAP = {
     "pass_yds": "passing yard",
     "pass_td": "passing td",
-    "int": "pass intercepted",
+    "pass_int": "pass intercepted",
     "rush_yds": "rushing yard",
     "rush_td": "rushing td",
     "rec": "reception",
     "rec_yds": "receiving yard",
     "rec_td": "receiving td",
-    "fl": "fumble lost",
+    "fumbles_lost": "fumble lost",
+}
+
+_EMPTY_SCHEMA = {
+    "source_player_id": pl.String,
+    "team": pl.String,
+    "position": pl.String,
+    "player_name_raw": pl.String,
+    "stat_name": pl.String,
+    "stat_value": pl.Float64,
 }
 
 
-def _split_name_and_team(cell: str) -> tuple[str, str | None]:
-    match = _TRAILING_TEAM_RE.match(cell.strip())
-    if match:
-        return match.group(1), match.group(2)
-    return cell.strip(), None
+def _header_keys(table) -> list[str | None]:
+    """Per-column internal key, `None` for `Player` and any unknown label."""
+    head_row = table.select_one("thead > tr.TableBase-headTr")
+    keys: list[str | None] = []
+    for th in head_row.find_all("th"):
+        text = th.get_text(" ", strip=True)
+        if text == "Player":
+            keys.append(None)
+            continue
+        _short, _, label = text.partition(" ")
+        keys.append(_COLUMN_LABELS.get(label))
+    return keys
 
 
 class CBSSource:
@@ -102,7 +132,7 @@ class CBSSource:
         frames = []
         with make_http_client() as client:
             for position, path_segment in _POSITION_PATH.items():
-                url = f"{BASE_URL}/{path_segment}/{season}/season/projections/nonppr/"
+                url = f"{BASE_URL}/{path_segment}/{season}/restofseason/projections/nonppr/"
                 response = client.get(url)
                 response.raise_for_status()
                 frames.append(self._parse_html(response.text, position, season))
@@ -110,40 +140,46 @@ class CBSSource:
 
     def _parse_html(self, html: str, position: str, season: int) -> pl.DataFrame:
         soup = BeautifulSoup(html, "lxml")
-        stat_cols = _POSITION_COLUMNS[position]
+        table = soup.select_one("#TableBase table")
 
-        rows = []
-        for tr in soup.select("table tbody tr"):
-            cells = tr.find_all("td")
-            if len(cells) != len(stat_cols) + 1:
-                continue
-            name_raw, team = _split_name_and_team(cells[0].get_text(strip=True))
-            stat_values = {
-                key: cells[i + 1].get_text(strip=True)
-                for i, key in enumerate(stat_cols)
-            }
-            rows.append({"player_name_raw": name_raw, "team": team, **stat_values})
+        rows: list[dict[str, object]] = []
+        if table is not None:
+            keys = _header_keys(table)
+            for tr in table.select("tbody > tr"):
+                cells = tr.find_all("td")
+                if len(cells) != len(keys):
+                    continue
+                name_link = cells[0].select_one(".CellPlayerName--long a")
+                team_span = cells[0].select_one(".CellPlayerName-team")
+                if name_link is None:
+                    continue
+                match = _PLAYER_ID_RE.search(name_link.get("href", ""))
+                row: dict[str, object] = {
+                    "source_player_id": match.group(1) if match else None,
+                    "player_name_raw": name_link.get_text(strip=True),
+                    "team": team_span.get_text(strip=True) if team_span else None,
+                }
+                for key, cell in zip(keys[1:], cells[1:]):
+                    if key is not None:
+                        row[key] = cell.get_text(strip=True)
+                rows.append(row)
 
         if not rows:
-            long = pl.DataFrame(
-                schema={
-                    "player_name_raw": pl.String,
-                    "team": pl.String,
-                    "stat_name": pl.String,
-                    "stat_value": pl.Float64,
-                }
-            )
+            long = pl.DataFrame(schema=_EMPTY_SCHEMA)
         else:
             df = pl.DataFrame(rows)
-            value_vars = [c for c in stat_cols if c in _STAT_MAP]
+            value_vars = [c for c in _STAT_MAP if c in df.columns]
             long = (
-                df.select(["player_name_raw", "team"] + value_vars)
+                df.select(["source_player_id", "player_name_raw", "team"] + value_vars)
                 .with_columns(
-                    pl.col(c).str.replace_all(",", "").cast(pl.Float64)
+                    pl.col(c)
+                    .str.replace_all(",", "")
+                    .replace("—", None)
+                    .cast(pl.Float64, strict=False)
                     for c in value_vars
                 )
                 .unpivot(
-                    index=["player_name_raw", "team"],
+                    index=["source_player_id", "player_name_raw", "team"],
                     on=value_vars,
                     variable_name="_raw_stat",
                     value_name="stat_value",
@@ -162,16 +198,7 @@ class CBSSource:
         long = long.with_columns(pl.lit(position).alias("position"))
 
         reference = build_crosswalk()
-        long = long.with_columns(
-            pl.struct(["player_name_raw", "position", "team"])
-            .map_elements(
-                lambda row: resolve_by_name(
-                    row["player_name_raw"], row["position"], row["team"], reference
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("player_id")
-        )
+        long = resolve_player_id_by_native_id(long, reference, "cbs_id")
 
         snapshot_date = dt.datetime.now(tz=dt.UTC).date()
         return long.select(
@@ -179,7 +206,7 @@ class CBSSource:
             pl.lit(0).alias("week"),
             pl.lit(self.name).alias("source"),
             pl.lit(snapshot_date).alias("snapshot_date"),
-            pl.lit(None, dtype=pl.String).alias("source_player_id"),
+            pl.col("source_player_id"),
             pl.col("player_id"),
             pl.col("player_name_raw"),
             pl.col("team"),
