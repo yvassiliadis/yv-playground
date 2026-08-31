@@ -9,18 +9,22 @@ from ffdraft.ids.crosswalk import apply_overrides, build_crosswalk, resolve_by_n
 
 @pytest.fixture
 def ff_playerids_fixture() -> pl.DataFrame:
-    """Small synthetic stand-in for nflreadpy.load_ff_playerids()."""
-    return pl.DataFrame(
-        {
-            "gsis_id": ["00-0033873", "00-0034796", None],
-            "sleeper_id": [4046, 522, 9999],
-            "espn_id": [3139477, 15847, 55555],
-            "fantasypros_id": [16420, 10731, None],
-            "name": ["Patrick Mahomes", "Travis Kelce", "Nobody Special"],
-            "position": ["QB", "TE", "WR"],
-            "team": ["KC", "KC", "FA"],
-        }
-    )
+    """Small synthetic stand-in for nflreadpy.load_ff_playerids().
+
+    Includes every ID column the real function exposes (not just the three
+    sources currently wired up) so build_crosswalk's select can't silently
+    narrow the schema.
+    """
+    n = 3
+    data = {
+        "gsis_id": ["00-0033873", "00-0034796", None],
+        "name": ["Patrick Mahomes", "Travis Kelce", "Nobody Special"],
+        "position": ["QB", "TE", "WR"],
+        "team": ["KC", "KC", "FA"],
+    }
+    for col in crosswalk._OTHER_ID_COLUMNS:
+        data[col] = list(range(n))
+    return pl.DataFrame(data)
 
 
 @pytest.fixture
@@ -62,6 +66,24 @@ class TestBuildCrosswalk:
 
         row = result.filter(pl.col("name") == "Patrick Mahomes").row(0, named=True)
         assert row["normalized_name"] == "patrick mahomes"
+
+    def test_carries_every_id_column_load_ff_playerids_exposes(
+        self, monkeypatch, ff_playerids_fixture
+    ):
+        # only sleeper/espn/fantasypros are wired up to a real source so
+        # far, but the brief calls for carrying "any others it exposes" too
+        # (mfl_id, yahoo_id, pfr_id, etc.) so a future source doesn't need a
+        # crosswalk rebuild just to add one more ID column.
+        monkeypatch.setattr(
+            crosswalk.nfl, "load_ff_playerids", lambda: ff_playerids_fixture
+        )
+
+        result = build_crosswalk()
+
+        for col in crosswalk._OTHER_ID_COLUMNS:
+            assert col in result.columns
+        assert "mfl_id" in result.columns
+        assert "yahoo_id" in result.columns
 
 
 class TestResolveByName:
@@ -140,6 +162,15 @@ class TestResolveByName:
             "Defense/Special Teams", "DEF", "KC", reference_fixture
         )
         assert result == "DST_KC"
+
+    def test_dst_unrecognized_spelling_returns_none_not_raises(self, reference_fixture):
+        # normalize_dst itself raises ValueError on an unrecognized team/DST
+        # string -- resolve_by_name must catch that and surface it as a
+        # genuine non-match like any other, never propagate the exception.
+        result = resolve_by_name(
+            "Springfield Isotopes D/ST", "DST", None, reference_fixture
+        )
+        assert result is None
 
 
 class TestApplyOverrides:

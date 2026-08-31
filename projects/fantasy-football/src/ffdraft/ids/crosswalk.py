@@ -34,11 +34,35 @@ import polars as pl
 
 from ffdraft.ids.normalize import normalize_dst, normalize_name
 
+# every cross-platform ID column load_ff_playerids() exposes besides gsis_id
+# (which becomes player_id below). Carried through even though only a few
+# sources are wired up so far -- cheap now, expensive to add later once a
+# source needs e.g. yahoo_id.
+_OTHER_ID_COLUMNS = [
+    "mfl_id",
+    "sportradar_id",
+    "fantasypros_id",
+    "pff_id",
+    "sleeper_id",
+    "nfl_id",
+    "espn_id",
+    "yahoo_id",
+    "fleaflicker_id",
+    "cbs_id",
+    "pfr_id",
+    "cfbref_id",
+    "rotowire_id",
+    "rotoworld_id",
+    "ktc_id",
+    "stats_id",
+    "stats_global_id",
+    "fantasy_data_id",
+    "swish_id",
+]
+
 REFERENCE_COLUMNS = [
     "player_id",
-    "sleeper_id",
-    "espn_id",
-    "fantasypros_id",
+    *_OTHER_ID_COLUMNS,
     "name",
     "normalized_name",
     "position",
@@ -62,9 +86,7 @@ def build_crosswalk() -> pl.DataFrame:
     raw = nfl.load_ff_playerids()
     return raw.select(
         pl.col("gsis_id").alias("player_id"),
-        "sleeper_id",
-        "espn_id",
-        "fantasypros_id",
+        *_OTHER_ID_COLUMNS,
         "name",
         pl.col("name")
         .map_elements(normalize_name, return_dtype=pl.String)
@@ -87,16 +109,27 @@ def resolve_by_name(
     output of `build_crosswalk`). DST positions skip the reference table
     entirely and resolve straight to a synthetic `DST_<TEAM>` ID via
     `normalize_dst`, matching the synthetic IDs `ingest.actuals` already
-    produces for defenses -- nflreadpy's player-ID table has no DST rows.
+    produces for defenses -- nflreadpy's player-ID table has no DST rows. An
+    unrecognized DST spelling from a scraped source is a genuine non-match
+    like any other, so `normalize_dst`'s `ValueError` is caught here and
+    turned into `None` rather than propagating.
 
-    Ties among same-name, same-position players are broken by `team`. If
-    `team` doesn't narrow the match down to exactly one row -- because it's
-    missing, or because it still doesn't disambiguate -- this returns `None`
-    rather than guessing at a specific player. Never raises on a genuine
-    non-match.
+    Ties among same-name, same-position players are broken by `team`. The
+    comparison is a case-normalized exact match (`team.upper()` against the
+    reference's `team` column as-is) -- if a source's team codes don't line
+    up with nflreadpy's own (e.g. "JAC" vs "JAX"), this fails closed to
+    `None` (unmatched) rather than risk tiebreaking onto the wrong player.
+
+    If `team` doesn't narrow the match down to exactly one row -- because
+    it's missing, or because it still doesn't disambiguate -- this returns
+    `None` rather than guessing at a specific player. Never raises on a
+    genuine non-match.
     """
     if position.upper() in _DST_POSITIONS:
-        team_abbr = normalize_dst(team or name_raw)
+        try:
+            team_abbr = normalize_dst(team or name_raw)
+        except ValueError:
+            return None
         return f"DST_{team_abbr}"
 
     normalized = normalize_name(name_raw)
@@ -124,6 +157,15 @@ def apply_overrides(df: pl.DataFrame, overrides_path: Path) -> pl.DataFrame:
     has -- including `None` from an unmatched `resolve_by_name` call. A row
     is matched by `source` + `source_player_id` when the override supplies a
     `source_player_id`; otherwise it's matched by normalized name + position.
+
+    Implementation note: id-matched and name-matched overrides are applied
+    as two sequential left-joins (id-matched first, then name-matched), each
+    coalescing its override column ahead of the running `player_id`. In the
+    ordinary case a `df` row is touched by at most one override row, so
+    order doesn't matter. If a single `df` row were somehow matched by both
+    an id-matched *and* a name-matched override row (e.g. a malformed
+    overrides file with contradictory entries for the same player), the
+    name-matched pass runs second and wins.
     """
     overrides = pl.read_csv(
         overrides_path,
