@@ -26,7 +26,7 @@ _DEFAULT_STARTERS = MappingProxyType(
     {
         "QB": 1,
         "RB": 2,
-        "WR": 2,
+        "WR": 3,
         "TE": 1,
         "FLEX": 1,
         "K": 1,
@@ -52,7 +52,7 @@ class RosterConfig:
     starters: MappingProxyType[str, int] = field(
         default_factory=lambda: _DEFAULT_STARTERS
     )
-    bench: int = 6
+    bench: int = 5
 
     def starters_at(self, position: str) -> int:
         """Starters for `position`, or 0 if it has no starting slot."""
