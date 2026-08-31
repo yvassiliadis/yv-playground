@@ -211,6 +211,102 @@ def test_derive_dst_expected_points_matches_hand_computed_decay_weighted_score()
     assert row["source"] == "derived_dst"
 
 
+def test_derive_dst_expected_points_divides_by_games_played_not_rows_present():
+    """`ingest.actuals` writes DST rows SPARSELY: a bucket gets a
+    `stat_value = 1.0` row only in the weeks it applied (no zero row
+    otherwise), and zero-valued counting stats are dropped entirely. So the
+    per-game average must be `sum(stat_value) / games played`, not a mean
+    over the rows that happen to be present -- a mean over present rows makes
+    every bucket flag average to exactly 1.0 (i.e. "applied in every game").
+
+    One team, one season, four games (weeks 1-4), hand-computed below.
+    """
+    rules = scoring.load_scoring_rules(REPO_ROOT_DATA)
+    historical = pl.DataFrame(
+        [
+            # Sacks: 2 in week 1, 3 in week 3, none in weeks 2/4 (no rows).
+            _dst_row("KC", 2024, 1, "sacks", 2.0),
+            _dst_row("KC", 2024, 3, "sacks", 3.0),
+            # One interception, in week 2 only.
+            _dst_row("KC", 2024, 2, "defense interception", 1.0),
+            # Points-allowed buckets: one per game, mutually exclusive.
+            _dst_row("KC", 2024, 1, "0-13 pts allowed", 1.0),
+            _dst_row("KC", 2024, 2, "0-13 pts allowed", 1.0),
+            _dst_row("KC", 2024, 3, "14-20 pts allowed", 1.0),
+            _dst_row("KC", 2024, 4, "14-20 pts allowed", 1.0),
+            # Yards-allowed buckets: one per game, mutually exclusive.
+            _dst_row("KC", 2024, 1, "0-349 yds allowed", 1.0),
+            _dst_row("KC", 2024, 2, "0-349 yds allowed", 1.0),
+            _dst_row("KC", 2024, 3, "0-349 yds allowed", 1.0),
+            _dst_row("KC", 2024, 4, "350-399 yds allowed", 1.0),
+        ]
+    )
+
+    games = 4  # weeks 1-4 -- the true denominator
+    # Per-game rates, each `sum(stat_value) / games`:
+    #   sacks                 5/4 = 1.25   * 1.0 pts =  1.25
+    #   defense interception  1/4 = 0.25   * 2.0 pts =  0.50
+    #   0-13 pts allowed      2/4 = 0.50   * 0.0 pts =  0.00
+    #   14-20 pts allowed     2/4 = 0.50   * -1.0 pts = -0.50
+    #   0-349 yds allowed     3/4 = 0.75   * 0.0 pts =  0.00
+    #   350-399 yds allowed   1/4 = 0.25   * -1.0 pts = -0.25
+    #                                        total   =  1.00
+    assert rules["sacks"] == 1.0
+    assert rules["defense interception"] == 2.0
+    assert rules["0-13 pts allowed"] == 0.0
+    assert rules["14-20 pts allowed"] == -1.0
+    assert rules["0-349 yds allowed"] == 0.0
+    assert rules["350-399 yds allowed"] == -1.0
+    expected = (
+        (5.0 / games) * rules["sacks"]
+        + (1.0 / games) * rules["defense interception"]
+        + (2.0 / games) * rules["0-13 pts allowed"]
+        + (2.0 / games) * rules["14-20 pts allowed"]
+        + (3.0 / games) * rules["0-349 yds allowed"]
+        + (1.0 / games) * rules["350-399 yds allowed"]
+    )
+    assert expected == 1.0
+
+    result = derive.derive_dst_expected_points(historical, rules=rules)
+    row = result.filter(pl.col("player_id") == "DST_KC").row(0, named=True)
+    assert abs(row["fantasy_points"] - expected) < 1e-9
+
+    # The old present-rows-only mean would have made every bucket flag 1.0
+    # and sacks 2.5/game: 2.5 + 2.0 + 0.0 - 1.0 + 0.0 - 1.0 = 2.5. Pin that
+    # down so a regression to `.mean()` cannot pass this test.
+    mean_over_present_rows = (
+        2.5 * rules["sacks"]
+        + 1.0 * rules["defense interception"]
+        + 1.0 * rules["0-13 pts allowed"]
+        + 1.0 * rules["14-20 pts allowed"]
+        + 1.0 * rules["0-349 yds allowed"]
+        + 1.0 * rules["350-399 yds allowed"]
+    )
+    assert mean_over_present_rows == 2.5
+    assert abs(row["fantasy_points"] - mean_over_present_rows) > 1e-9
+
+
+def test_derive_dst_expected_points_counts_games_from_weeks_not_stat_rows():
+    """A team with a quiet game still has that game in the denominator: the
+    week is counted from any row the team has, not from rows of the stat
+    being averaged."""
+    rules = scoring.load_scoring_rules(REPO_ROOT_DATA)
+    # Weeks 1-3 all played; only week 1 recorded a sack.
+    historical = pl.DataFrame(
+        [
+            _dst_row("KC", 2024, 1, "sacks", 3.0),
+            _dst_row("KC", 2024, 2, "0-13 pts allowed", 1.0),
+            _dst_row("KC", 2024, 3, "0-13 pts allowed", 1.0),
+        ]
+    )
+
+    result = derive.derive_dst_expected_points(historical, rules=rules)
+    row = result.filter(pl.col("player_id") == "DST_KC").row(0, named=True)
+
+    # 3 sacks / 3 games = 1.0/game * 1 pt; the pts-allowed bucket is worth 0.
+    assert abs(row["fantasy_points"] - 1.0) < 1e-9
+
+
 def test_derive_dst_expected_points_empty_input_returns_empty_not_crash(caplog):
     # historical_team_stats has rows, but none matching any DST-derived
     # stat_name -- per_season ends up empty, so `.max()` on its "season"

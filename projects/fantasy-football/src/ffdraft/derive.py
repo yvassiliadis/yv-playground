@@ -17,27 +17,30 @@ pipeline (`scoring.score()`, calibration) never has to special-case them.
 
 Where this module is wired in
 -----------------------------
-`board.build_board` is the single caller, via the two entry points at the
-bottom of each section:
+`board.build_board` is the single caller, and currently uses exactly one
+entry point:
 
-* `augment_projections()` -- called **before** `blend.apply_blend`, because
-  1st downs are canonical long-schema *stat rows* that have to flow through
-  `scoring.score()` with everything else. Each derived row keeps its parent
-  row's `source`, so every source's scored projection gains its own 1st-down
-  contribution and the per-source blend weights stay meaningful.
 * `derive_dst_seasonal_ep()` -- called **after** `apply_blend`, because it
   returns fantasy points already, not stat rows: it is an EP-level estimate
   used to fill in DSTs the blend could not produce.
 
-`model/calibrate.py` deliberately does NOT augment its training frame with
-`derive_first_downs`. The rate it derives comes from the same `actuals` frame
-that supplies the calibration target, so folding it into the training
-features would leak the predicted season's own 1st-down production into the
-features. The cost of that choice is a small scale mismatch -- board-time EP
-carries 1st-down points the calibrators were not fitted against -- which is
-acknowledged, uniform within a position, and therefore near-neutral for the
-within-position ranking the board is actually read for. Removing it properly
-needs a season-aware (`seasons < S` only) rate table, which is a future task.
+`augment_projections()`/`derive_first_downs()` are **not currently wired in
+anywhere**, and `ingest/actuals.py` correspondingly does not map nflreadpy's
+`rushing_first_downs`/`receiving_first_downs` columns, so 1st-down points are
+not scored at all right now. The reason is an asymmetry in calibration:
+`model/calibrate.py` trains on historical *projection* snapshots, none of
+which carry 1st-down rows, against a scored-actuals target. If the target
+scores 1st downs, the calibrators silently absorb a 1st-down uplift through
+correlated features (yards, receptions); adding an explicit derived 1st-down
+term at board time on top of that double-counts it. Folding the derivation
+into the training frame instead is not a fix either, because the rate would
+come from the same `actuals` frame that supplies the target, leaking the
+predicted season's own production into its features. Doing this properly
+needs a season-aware (`seasons < S` only) rate table on the training side;
+until then, the 0.5 pts/1st down is simply left on the table -- a documented
+gap, uniform within a position, and therefore near-neutral for the
+within-position ranking the board is actually read for. `derive_first_downs`
+itself is correct and stays tested, ready to be wired back in.
 
 Every function here takes/returns plain `pl.DataFrame`s in the canonical
 long schema (`ingest.actuals.CANONICAL_COLUMNS`) -- no hidden I/O, no
@@ -304,9 +307,9 @@ def augment_projections(
 ) -> pl.DataFrame:
     """`projections` with derived 1st-down rows appended.
 
-    The pipeline entry point for `derive_first_downs` -- see this module's
-    docstring for why it belongs before the blend rather than after it.
-    Returns `projections` unchanged (rather than raising) when either frame
+    The pipeline entry point for `derive_first_downs`. Currently unused --
+    see this module's docstring for the calibration asymmetry that keeps
+    1st-down points out of the pipeline for now. Returns `projections` unchanged (rather than raising) when either frame
     is empty or is missing the columns the derivation needs, so callers can
     always route projections through this without pre-checking.
     """
@@ -354,6 +357,25 @@ _DST_PTS_ALLOWED_BUCKETS = [
     "35+ pts allowed",
 ]
 
+# The positive-scoring DST stats. The first six are exactly what
+# `ingest.actuals._DST_COUNTING_STAT_MAP` writes; the last three are scoring
+# CSV stat names no current feed produces but which cost nothing to list (a
+# stat with no rows contributes nothing). Leaving these out was a real bug:
+# with only `_DST_COUNTING_STATS` (which nothing currently produces either)
+# and the allowed-buckets in the derived set, a fallback-derived DST score
+# was the *negative half* of a defense's points and nothing else.
+_DST_POSITIVE_STATS = [
+    "sacks",
+    "defense interception",
+    "fumble recovery",
+    "defense td",
+    "special teams td",
+    "fumble recovery td",
+    "safety",
+    "forced fumble",
+    "defense blocked kick",
+]
+
 _DST_YDS_ALLOWED_BUCKETS = [
     "0-349 yds allowed",
     "350-399 yds allowed",
@@ -364,15 +386,20 @@ _DST_YDS_ALLOWED_BUCKETS = [
 ]
 
 # All DST stats this function derives an expected per-game value for. Bucket
-# flags (`stat_value == 1.0` on the one game-week they occurred, absent
-# otherwise) decay-average into a fractional occurrence rate per game; fed
-# through `scoring.score()` unchanged, `sum(rate * points_per_bucket)` over
-# a team's mutually-exclusive buckets is exactly the expected value of the
-# points that bucket category contributes per game -- no bucket-specific
-# logic needed, matching `scoring.score()`'s "no bucket logic of its own"
-# design.
+# flags (`stat_value == 1.0` on the game-weeks they occurred, and *no row at
+# all* otherwise -- `ingest.actuals` writes them sparse, not as explicit
+# zeroes) average into a fractional occurrence rate per game, which is why
+# the per-game average below has to divide by games played rather than by
+# the number of rows present. Fed through `scoring.score()` unchanged,
+# `sum(rate * points_per_bucket)` over a team's mutually-exclusive buckets is
+# exactly the expected value of the points that bucket category contributes
+# per game -- no bucket-specific logic needed, matching `scoring.score()`'s
+# "no bucket logic of its own" design.
 _DST_DERIVED_STATS = (
-    _DST_COUNTING_STATS + _DST_PTS_ALLOWED_BUCKETS + _DST_YDS_ALLOWED_BUCKETS
+    _DST_COUNTING_STATS
+    + _DST_POSITIVE_STATS
+    + _DST_PTS_ALLOWED_BUCKETS
+    + _DST_YDS_ALLOWED_BUCKETS
 )
 
 DEFAULT_SCORING_RULES_PATH = (
@@ -401,9 +428,9 @@ def derive_dst_expected_points(
 ) -> pl.DataFrame:
     """Decay-weighted historical per-game DST expected fantasy points.
 
-    For each team, computes a per-season per-game average of every granular
-    DST stat_name in `_DST_DERIVED_STATS`, then combines seasons into a
-    single decay-weighted average:
+    For each team, computes a per-season per-game average of every DST
+    stat_name in `_DST_DERIVED_STATS`, then combines seasons into a single
+    decay-weighted average:
 
         weight(season) = decay ** (most_recent_season - season)
         weighted_avg   = sum(weight * season_avg) / sum(weight)
@@ -412,7 +439,33 @@ def derive_dst_expected_points(
     weight `decay`, two seasons back gets `decay**2`, and so on -- a
     standard exponential recency decay indexed by season, since
     `historical_team_stats` spans full seasons of weekly rows rather than a
-    single ordered game sequence. With the default `decay=0.35`, the most
+    single ordered game sequence.
+
+    Per-game denominator
+    --------------------
+    The per-season average is `sum(stat_value) / games_played`, NOT the mean
+    over the rows that happen to be present. `ingest.actuals` writes the
+    points/yards-allowed buckets *sparsely* -- `stat_value = 1.0` in the
+    weeks a bucket applied and no row at all in the weeks it didn't -- and
+    filters zero-valued counting stats out entirely, so a mean over present
+    rows answers "how big was this stat in the games where it happened",
+    which for a bucket flag is always exactly 1.0. That charged every team
+    as if every bucket it ever landed in applied to every game.
+
+    `games_played` is the number of distinct `week` values that team has any
+    row for in that season, counted over the whole input frame (not just the
+    `_DST_DERIVED_STATS` subset). That is the cleanest correct denominator
+    available at this call site: the input is `ingest.actuals`' own DST
+    output, which emits a points-allowed and a yards-allowed bucket row for
+    every game whose schedule join resolved, so "weeks with any row" is
+    "games played" in practice. It undercounts only for a game where the
+    schedule join failed *and* the team recorded no counting stat at all --
+    the same games `ingest.actuals` documents as unbucketable -- which
+    leaves the average computed over the games actually observed rather than
+    silently inflating it. Nothing else in scope (no schedule frame reaches
+    this function) gives a better count without new plumbing.
+
+    With the default `decay=0.35`, the most
     recent season dominates (weight 1 vs. ~0.35 for the prior season and
     ~0.12 two seasons back), reflecting that team defensive personnel and
     scheme turn over enough year to year that older seasons are a weak
@@ -433,12 +486,33 @@ def derive_dst_expected_points(
     to blend against reliably (see `sources/fantasypros.py`,
     `sources/sleeper.py`).
     """
+    if "week" not in historical_team_stats.columns:
+        # `week` is the denominator source (see the "Per-game denominator"
+        # note in this function's docstring); without it there is no honest
+        # per-game average to compute.
+        logger.warning(
+            "derive_dst_expected_points(): historical_team_stats has no "
+            "'week' column, so games played per team-season cannot be "
+            "counted; returning an empty result."
+        )
+        return pl.DataFrame(schema=_EMPTY_DST_SCORE_SCHEMA)
+
     relevant = historical_team_stats.filter(
         pl.col("stat_name").is_in(_DST_DERIVED_STATS)
     )
 
-    per_season = relevant.group_by(["team", "season", "stat_name"]).agg(
-        pl.col("stat_value").mean().alias("season_avg")
+    # Games played per team-season: the number of distinct weeks that team
+    # has *any* row for, counted over the whole input frame rather than over
+    # `relevant`, so a quiet game still counts toward the denominator.
+    games = historical_team_stats.group_by(["team", "season"]).agg(
+        pl.col("week").n_unique().alias("games")
+    )
+
+    per_season = (
+        relevant.group_by(["team", "season", "stat_name"])
+        .agg(pl.col("stat_value").sum().alias("stat_total"))
+        .join(games, on=["team", "season"], how="left")
+        .with_columns((pl.col("stat_total") / pl.col("games")).alias("season_avg"))
     )
 
     if per_season.is_empty():
@@ -517,7 +591,7 @@ def derive_dst_seasonal_ep(
     """
     if historical_team_stats.height == 0 or any(
         c not in historical_team_stats.columns
-        for c in ("team", "season", "stat_name", "stat_value")
+        for c in ("team", "season", "week", "stat_name", "stat_value")
     ):
         return pl.DataFrame(schema=_EMPTY_DST_EP_SCHEMA)
 
