@@ -56,7 +56,10 @@ def make_http_client(**kwargs: object) -> httpx.Client:
     headers = {"User-Agent": _BROWSER_USER_AGENT}
     headers.update(kwargs.pop("headers", None) or {})
     timeout = kwargs.pop("timeout", DEFAULT_TIMEOUT)
-    return httpx.Client(headers=headers, timeout=timeout, **kwargs)
+    follow_redirects = kwargs.pop("follow_redirects", True)
+    return httpx.Client(
+        headers=headers, timeout=timeout, follow_redirects=follow_redirects, **kwargs
+    )
 
 
 @runtime_checkable
