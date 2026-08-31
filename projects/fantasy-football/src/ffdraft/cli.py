@@ -6,6 +6,7 @@ import polars as pl
 import typer
 
 from ffdraft.ingest.actuals import load_dst_actuals, load_weekly_actuals
+from ffdraft.ingest.archives import load_ffa_archives, load_ffdp_archives
 from ffdraft.ingest.snapshot import run_snapshot
 
 app = typer.Typer()
@@ -13,6 +14,7 @@ ingest_app = typer.Typer(help="Data ingestion commands.")
 app.add_typer(ingest_app, name="ingest")
 
 RAW_ACTUALS_DIR = Path("data/raw/actuals")
+HISTORICAL_DIR = Path("data/historical")
 
 
 @app.command()
@@ -88,6 +90,36 @@ def ingest_snapshot(
     """
     source_list = [s.strip() for s in sources.split(",")] if sources else None
     run_snapshot(season=season, week=week, sources=source_list)
+
+
+@ingest_app.command("archives")
+def ingest_archives(
+    path: Path = typer.Option(
+        ...,
+        "--path",
+        help="Directory containing 'ffa' and 'ffdp' subdirectories of "
+        "already-downloaded archive files. Neither subdirectory needs to "
+        "exist -- a missing one just yields zero rows for that loader.",
+    ),
+) -> None:
+    """Parse local FFA and ffdp historical archive files into canonical
+    Parquet, writing `data/historical/ffa.parquet` and
+    `data/historical/ffdp.parquet`.
+
+    No network access -- both loaders only read whatever files are already
+    on disk under `path`. See `ffdraft.ingest.archives`'s module docstring
+    for the (unverified against real downloads) archive formats assumed.
+    """
+    ffa = load_ffa_archives(path / "ffa")
+    ffdp = load_ffdp_archives(path / "ffdp")
+
+    HISTORICAL_DIR.mkdir(parents=True, exist_ok=True)
+    ffa.write_parquet(HISTORICAL_DIR / "ffa.parquet")
+    ffdp.write_parquet(HISTORICAL_DIR / "ffdp.parquet")
+
+    typer.echo(
+        f"Wrote {ffa.height} FFA rows and {ffdp.height} ffdp rows to {HISTORICAL_DIR}"
+    )
 
 
 if __name__ == "__main__":
