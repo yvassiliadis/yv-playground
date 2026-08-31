@@ -23,12 +23,32 @@ live ingests.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import polars as pl
 
 from ffdraft import scoring
-from ffdraft.ingest.actuals import CANONICAL_COLUMNS
+
+logger = logging.getLogger(__name__)
+
+# Typed empty-frame schema for the canonical long format, mirroring the
+# `_EMPTY_SCHEMA` convention in `sources/sleeper.py`/`sources/espn.py` --
+# used wherever this module needs to return "no rows" while still giving
+# callers a correctly-typed (rather than all-Null) DataFrame to concat onto.
+_EMPTY_CANONICAL_SCHEMA: dict[str, pl.DataType] = {
+    "season": pl.Int64,
+    "week": pl.Int64,
+    "source": pl.String,
+    "snapshot_date": pl.String,
+    "source_player_id": pl.String,
+    "player_id": pl.String,
+    "player_name_raw": pl.String,
+    "team": pl.String,
+    "position": pl.String,
+    "stat_name": pl.String,
+    "stat_value": pl.Float64,
+}
 
 # ---------------------------------------------------------------------------
 # 1st downs
@@ -109,20 +129,47 @@ def _shrunk_rate_table(
             pl.col("first_downs").sum().alias("pos_first_downs"),
         )
         .with_columns(
-            (pl.col("pos_first_downs") / pl.col("pos_volume")).alias("positional_rate")
+            # A position with zero total historical volume (e.g. a position
+            # entirely absent from historical_actuals) has no defined mean
+            # rate -- leave it null rather than letting `x / 0` silently
+            # become inf/NaN, which would then poison every shrunk_rate for
+            # that position downstream.
+            pl.when(pl.col("pos_volume") > 0)
+            .then(pl.col("pos_first_downs") / pl.col("pos_volume"))
+            .otherwise(None)
+            .alias("positional_rate")
         )
     )
 
-    return (
-        per_player.join(positional, on="position", how="left")
-        .with_columns(
-            (
-                (pl.col("first_downs") + prior_volume * pl.col("positional_rate"))
-                / (pl.col("volume") + prior_volume)
-            ).alias("shrunk_rate")
+    zero_volume_positions = positional.filter(pl.col("positional_rate").is_null())[
+        "position"
+    ].to_list()
+    if zero_volume_positions:
+        logger.warning(
+            "_shrunk_rate_table(): %d position(s) have zero total historical "
+            "volume for stat_name=%r and get no positional-mean fallback: %s",
+            len(zero_volume_positions),
+            volume_stat,
+            sorted(zero_volume_positions),
         )
-        .select("player_id", "position", "shrunk_rate", "positional_rate")
-    )
+
+    joined = per_player.join(positional, on="position", how="left")
+    return joined.with_columns(
+        # Standard case: blend the player's own rate with the positional
+        # mean. If the positional mean is undefined (null, from the guard
+        # above), fall back to the player's own rate when they have any
+        # volume at all, else 0.0 -- logged below so a silent zero doesn't
+        # get mistaken for a genuinely observed rate.
+        pl.when(pl.col("positional_rate").is_not_null())
+        .then(
+            (pl.col("first_downs") + prior_volume * pl.col("positional_rate"))
+            / (pl.col("volume") + prior_volume)
+        )
+        .when(pl.col("volume") > 0)
+        .then(pl.col("first_downs") / pl.col("volume"))
+        .otherwise(0.0)
+        .alias("shrunk_rate")
+    ).select("player_id", "position", "shrunk_rate", "positional_rate")
 
 
 def _derive_one_first_down_stat(
@@ -145,7 +192,7 @@ def _derive_one_first_down_stat(
 
     volume_rows = projections.filter(pl.col("stat_name") == volume_stat)
     if volume_rows.is_empty():
-        return pl.DataFrame(schema=CANONICAL_COLUMNS)
+        return pl.DataFrame(schema=_EMPTY_CANONICAL_SCHEMA)
 
     joined = (
         volume_rows.join(
@@ -154,6 +201,23 @@ def _derive_one_first_down_stat(
         .join(positional_fallback, on="position", how="left")
         .with_columns(pl.coalesce(["shrunk_rate", "positional_rate"]).alias("rate"))
     )
+
+    unresolved = joined.filter(pl.col("rate").is_null())
+    if not unresolved.is_empty():
+        # A projected player whose position has zero historical volume for
+        # this stat (so no positional-mean fallback exists either, per the
+        # `_shrunk_rate_table` guard) -- fall back to a rate of 0.0 rather
+        # than emitting a null stat_value, and say so explicitly instead of
+        # letting the gap pass silently.
+        logger.warning(
+            "_derive_one_first_down_stat(): %d projection row(s) for "
+            "stat_name=%r have no derivable rate (no player history and no "
+            "positional-mean fallback); defaulting %r to 0.0",
+            unresolved.height,
+            volume_stat,
+            first_down_stat,
+        )
+        joined = joined.with_columns(pl.col("rate").fill_null(0.0))
 
     return joined.select(
         pl.col("season"),
@@ -203,7 +267,7 @@ def derive_first_downs(
     )
     non_empty = [df for df in (rushing, receiving) if not df.is_empty()]
     if not non_empty:
-        return pl.DataFrame(schema=CANONICAL_COLUMNS)
+        return pl.DataFrame(schema=_EMPTY_CANONICAL_SCHEMA)
     return pl.concat(non_empty, how="vertical")
 
 
@@ -258,6 +322,19 @@ DEFAULT_SCORING_RULES_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "scoring_rules.csv"
 )
 
+# Typed empty-frame schema matching `scoring.score()`'s own output shape
+# (its GROUP_COLUMNS plus `fantasy_points`), returned when
+# `historical_team_stats` has no rows for any DST-derived stat -- guards
+# against `per_season["season"].max()` coming back `None` and poisoning the
+# decay-exponent/season arithmetic below with a silent crash or null.
+_EMPTY_DST_SCORE_SCHEMA: dict[str, pl.DataType] = {
+    "season": pl.Int64,
+    "week": pl.Int64,
+    "source": pl.String,
+    "player_id": pl.String,
+    "fantasy_points": pl.Float64,
+}
+
 
 def derive_dst_expected_points(
     historical_team_stats: pl.DataFrame,
@@ -305,6 +382,21 @@ def derive_dst_expected_points(
     per_season = relevant.group_by(["team", "season", "stat_name"]).agg(
         pl.col("stat_value").mean().alias("season_avg")
     )
+
+    if per_season.is_empty():
+        # No rows in historical_team_stats matched any DST-derived
+        # stat_name -- `.max()` on an empty column returns None, which
+        # would otherwise blow up (or silently null out) the decay-exponent
+        # and season arithmetic below. Return an empty, correctly-typed
+        # result and say why, rather than crashing uninformatively or
+        # propagating nulls.
+        logger.warning(
+            "derive_dst_expected_points(): historical_team_stats has no "
+            "rows matching any DST-derived stat_name (%s); returning an "
+            "empty result.",
+            sorted(_DST_DERIVED_STATS),
+        )
+        return pl.DataFrame(schema=_EMPTY_DST_SCORE_SCHEMA)
 
     most_recent_season = per_season["season"].max()
     per_season = per_season.with_columns(

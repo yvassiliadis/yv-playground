@@ -126,6 +126,29 @@ def test_derive_first_downs_receiving_rate_uses_receptions_as_volume():
     assert abs(row["stat_value"] - expected_rate * 60.0) < 1e-9
 
 
+def test_derive_first_downs_zero_volume_position_falls_back_to_zero_not_nan(caplog):
+    # QB has explicit zero rushing-yard volume in historical_actuals (so the
+    # position's total volume is 0.0) -- the positional_rate division would
+    # be 0/0 without the guard, silently becoming NaN and poisoning every
+    # QB's shrunk_rate. With the guard, a QB projected for rushing yards
+    # with no other historical signal falls back to a rate of 0.0, and the
+    # fallback is logged rather than silent.
+    historical = pl.DataFrame(
+        [
+            _hist_row("qb1", "QB", "rushing yard", 0.0),
+            _hist_row("qb1", "QB", "rushing 1st down", 0.0),
+        ]
+    )
+    projections = pl.DataFrame([_proj_row("qb1", "QB", "rushing yard", 20.0)])
+
+    with caplog.at_level("WARNING"):
+        result = derive.derive_first_downs(projections, historical)
+
+    row = result.filter(pl.col("stat_name") == "rushing 1st down").row(0, named=True)
+    assert row["stat_value"] == 0.0  # falls back to 0.0, not NaN/inf
+    assert "zero total historical" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # derive_dst_expected_points
 # ---------------------------------------------------------------------------
@@ -186,6 +209,25 @@ def test_derive_dst_expected_points_matches_hand_computed_decay_weighted_score()
     assert row["season"] == 2025  # most_recent_season + 1
     assert row["week"] == 0
     assert row["source"] == "derived_dst"
+
+
+def test_derive_dst_expected_points_empty_input_returns_empty_not_crash(caplog):
+    # historical_team_stats has rows, but none matching any DST-derived
+    # stat_name -- per_season ends up empty, so `.max()` on its "season"
+    # column would be None. Without the guard, `None - pl.col("season")`
+    # (the decay exponent) and `None + 1` (the target season literal) both
+    # raise/propagate nulls uninformatively. With the guard, this returns
+    # an empty, correctly-typed result and logs why.
+    historical = pl.DataFrame(
+        [_dst_row("KC", 2023, 1, "passing yard", 300.0)]  # not a DST stat
+    )
+
+    with caplog.at_level("WARNING"):
+        result = derive.derive_dst_expected_points(historical)
+
+    assert result.is_empty()
+    assert result.columns == ["season", "week", "source", "player_id", "fantasy_points"]
+    assert "no rows matching" in caplog.text
 
 
 # ---------------------------------------------------------------------------
