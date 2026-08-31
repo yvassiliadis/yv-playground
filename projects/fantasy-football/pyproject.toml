@@ -14,6 +14,11 @@ dependencies = [
     "typer>=0.9.0",
     "scikit-learn>=1.3.0",
     "lightgbm>=4.0.0",
+    # numpy and scipy already arrive transitively via scikit-learn/lightgbm,
+    # but model/calibrate.py imports both directly (feature matrices,
+    # scipy.stats.spearmanr) so they are declared explicitly.
+    "numpy>=1.26.0",
+    "scipy>=1.11.0",
 ]
 
 [project.scripts]

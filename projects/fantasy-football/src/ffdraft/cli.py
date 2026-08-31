@@ -5,16 +5,21 @@ from pathlib import Path
 import polars as pl
 import typer
 
+from ffdraft import scoring
 from ffdraft.ingest.actuals import load_dst_actuals, load_weekly_actuals
 from ffdraft.ingest.archives import load_ffa_archives, load_ffdp_archives
 from ffdraft.ingest.snapshot import run_snapshot
+from ffdraft.model import calibrate as calibrate_module
 
 app = typer.Typer()
 ingest_app = typer.Typer(help="Data ingestion commands.")
 app.add_typer(ingest_app, name="ingest")
+model_app = typer.Typer(help="Modelling commands.")
+app.add_typer(model_app, name="model")
 
 RAW_ACTUALS_DIR = Path("data/raw/actuals")
 HISTORICAL_DIR = Path("data/historical")
+SCORING_RULES_PATH = Path("data/scoring_rules.csv")
 
 
 @app.command()
@@ -120,6 +125,51 @@ def ingest_archives(
     typer.echo(
         f"Wrote {ffa.height} FFA rows and {ffdp.height} ffdp rows to {HISTORICAL_DIR}"
     )
+
+
+@model_app.command("calibrate")
+def model_calibrate(
+    projections: Path = typer.Option(
+        ...,
+        "--projections",
+        help="Parquet of canonical long-schema historical projections "
+        "(multiple sources).",
+    ),
+    actuals: Path = typer.Option(
+        ...,
+        "--actuals",
+        help="Parquet of canonical long-schema actuals (nflverse).",
+    ),
+    scoring_rules: Path = typer.Option(
+        SCORING_RULES_PATH, "--scoring-rules", help="Scoring rules CSV."
+    ),
+    lambda_: float = typer.Option(
+        calibrate_module.RECENCY_LAMBDA,
+        "--lambda",
+        help="Recency decay: each training row is weighted exp(-lambda * years_ago).",
+    ),
+    out: Path = typer.Option(
+        calibrate_module.DEFAULT_SOURCE_WEIGHTS_PATH,
+        "--out",
+        help="Where to write the fitted per-position source weights.",
+    ),
+) -> None:
+    """Run LOSO calibration across all six calibrators and write source weights.
+
+    Prints the per-position x per-calibrator comparison table, then refits
+    each position's winner on all seasons and writes the result to `--out`
+    for `model/blend.py` to consume without re-fitting.
+    """
+    rules = scoring.load_scoring_rules(scoring_rules)
+    loso_df, weights_df = calibrate_module.run_calibration(
+        pl.read_parquet(projections),
+        pl.read_parquet(actuals),
+        rules,
+        lambda_=lambda_,
+        out_path=out,
+    )
+    calibrate_module.print_loso_table(loso_df)
+    typer.echo(f"Wrote {weights_df.height} position weight rows to {out}")
 
 
 if __name__ == "__main__":
