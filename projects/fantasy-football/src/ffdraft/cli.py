@@ -6,6 +6,7 @@ import polars as pl
 import typer
 
 from ffdraft.ingest.actuals import load_dst_actuals, load_weekly_actuals
+from ffdraft.ingest.snapshot import run_snapshot
 
 app = typer.Typer()
 ingest_app = typer.Typer(help="Data ingestion commands.")
@@ -65,6 +66,28 @@ def ingest_actuals(
         season_df.write_parquet(out_path)
 
     typer.echo(f"Wrote actuals for seasons: {season_list}")
+
+
+@ingest_app.command("snapshot")
+def ingest_snapshot(
+    season: int = typer.Option(
+        ..., "--season", help="Season to fetch projections for."
+    ),
+    week: int = typer.Option(0, "--week", help="0 for seasonal projections."),
+    sources: str | None = typer.Option(
+        None,
+        "--sources",
+        help="Comma-separated source names to run, e.g. sleeper,espn. "
+        "Defaults to every registered source.",
+    ),
+) -> None:
+    """Fetch a projections snapshot from every registered source (or a subset).
+
+    Tolerates one source failing -- it logs the failure and continues with
+    the rest, then prints an "N/M sources succeeded" summary.
+    """
+    source_list = [s.strip() for s in sources.split(",")] if sources else None
+    run_snapshot(season=season, week=week, sources=source_list)
 
 
 if __name__ == "__main__":

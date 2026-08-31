@@ -1,0 +1,106 @@
+[
+  {
+    "id": 4685278,
+    "fullName": "Luther Burden III",
+    "defaultPositionId": 3,
+    "proTeamId": 3,
+    "stats": [
+      {
+        "scoringPeriodId": 0,
+        "seasonId": 2026,
+        "statSourceId": 1,
+        "statSplitTypeId": 0,
+        "stats": {
+          "23": 9.138497336,
+          "24": 49.50506319,
+          "25": 0.396468095,
+          "26": 0.023416541,
+          "39": 5.417199499,
+          "40": 2.912062541,
+          "42": 937.1764825,
+          "43": 5.061843238,
+          "44": 0.336252821,
+          "53": 75.04624562,
+          "72": 0.674015315
+        }
+      },
+      {
+        "scoringPeriodId": 1,
+        "seasonId": 2026,
+        "statSourceId": 0,
+        "statSplitTypeId": 1,
+        "stats": {
+          "42": 60.0,
+          "53": 5.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 15864,
+    "fullName": "Geno Smith",
+    "defaultPositionId": 1,
+    "proTeamId": 20,
+    "stats": [
+      {
+        "scoringPeriodId": 0,
+        "seasonId": 2026,
+        "statSourceId": 1,
+        "statSplitTypeId": 0,
+        "stats": {
+          "3": 3815.216003,
+          "4": 20.4058202,
+          "19": 2.477623811,
+          "20": 14.35380989,
+          "23": 58.04035325,
+          "24": 220.1197872,
+          "25": 1.042591859,
+          "26": 0.117834943,
+          "72": 3.435065456
+        }
+      }
+    ]
+  },
+  {
+    "id": 4685382,
+    "fullName": "Omarion Hampton",
+    "defaultPositionId": 2,
+    "proTeamId": 24,
+    "stats": [
+      {
+        "scoringPeriodId": 0,
+        "seasonId": 2026,
+        "statSourceId": 1,
+        "statSplitTypeId": 0,
+        "stats": {
+          "23": 253.9810123,
+          "24": 1084.430796,
+          "25": 9.388263998,
+          "26": 0.234501191,
+          "42": 363.297202,
+          "43": 1.758074309,
+          "44": 0.043532522,
+          "53": 51.61891947,
+          "72": 1.087626349
+        }
+      }
+    ]
+  },
+  {
+    "id": 9999999,
+    "fullName": "Unrostered Rookie",
+    "defaultPositionId": 2,
+    "proTeamId": 999,
+    "stats": [
+      {
+        "scoringPeriodId": 0,
+        "seasonId": 2026,
+        "statSourceId": 1,
+        "statSplitTypeId": 0,
+        "stats": {
+          "24": 50.0
+        }
+      }
+    ]
+  }
+]
