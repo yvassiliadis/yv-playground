@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from types import MappingProxyType
+
 import polars as pl
 import pytest
 
@@ -296,3 +299,84 @@ def test_calibrate_lambda_risk_picks_the_uniquely_best_candidate():
     )
     lam = vor.calibrate_lambda_risk(historical_df, candidate_lambdas=(2.0, 1.0, 0.0))
     assert lam == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Degraded quantile output must read as "unknown sigma", not "zero sigma".
+# ---------------------------------------------------------------------------
+
+
+def test_risk_adjusted_vor_treats_degraded_null_quantiles_as_unknown_sigma():
+    """A player whose winning calibrator degraded to EqualWeightMean gets null
+    EP_p25/EP_p75 (see calibrate.QuantileBlend.predict). That must fall through
+    to `stddev`, and must NOT be read as a zero-width, risk-free band."""
+    df = pl.DataFrame(
+        {
+            "player_id": ["real", "degraded", "nothing"],
+            "position": ["WR", "WR", "WR"],
+            "EP": [200.0, 200.0, 200.0],
+            "VOR": [50.0, 50.0, 50.0],
+            # `degraded`/`nothing` are what the fallback branch now emits.
+            "EP_p25": [180.0, None, None],
+            "EP_p75": [220.0, None, None],
+            "stddev": [30.0, 30.0, None],
+        }
+    )
+
+    result = vor.risk_adjusted_vor(df, lambda_risk=1.0)
+    by_player = dict(zip(result["player_id"], result["risk_adjusted_vor"]))
+
+    # Real quantiles: sigma = (220 - 180) / 1.34898.
+    assert by_player["real"] == pytest.approx(50.0 - 40.0 / vor._IQR_TO_SIGMA)
+    # Degraded: falls through to stddev, NOT sigma = 0 (which would give 50.0).
+    assert by_player["degraded"] == pytest.approx(20.0)
+    assert by_player["degraded"] != pytest.approx(50.0)
+    # No variance information at all stays null rather than becoming risk-free.
+    assert by_player["nothing"] is None
+
+
+# ---------------------------------------------------------------------------
+# Positions absent from the ADP pool (I2).
+# ---------------------------------------------------------------------------
+
+
+def test_compute_vor_warns_and_falls_back_when_a_position_is_absent_from_adp(caplog):
+    """A hand-maintained ADP file missing TEs is a data gap, not a result: warn
+    and use the roster-math replacement rank instead of nulling every TE."""
+    blended = pl.DataFrame(
+        {
+            "player_id": ["te1", "te2", "te3", "wr1"],
+            "position": ["TE", "TE", "TE", "WR"],
+            "EP": [150.0, 120.0, 100.0, 200.0],
+        }
+    )
+    adp = pl.DataFrame({"player_id": ["wr1"], "position": ["WR"], "adp": [1]})
+    roster = RosterConfig(starters=MappingProxyType({"TE": 1, "WR": 1}))
+
+    with caplog.at_level(logging.WARNING, logger=vor.__name__):
+        result = vor.compute_vor(blended, adp, teams=2, roster_config=roster)
+
+    assert "TE" in caplog.text and "ADP" in caplog.text
+
+    # teams=2 * 1 TE starter -> replacement is the 2nd-ranked TE by EP (120.0).
+    tes = result.filter(pl.col("position") == "TE")
+    assert tes["VOR"].null_count() == 0
+    assert dict(zip(tes["player_id"], tes["VOR"])) == pytest.approx(
+        {"te1": 30.0, "te2": 0.0, "te3": -20.0}
+    )
+
+
+def test_compute_vor_leaves_null_vor_and_warns_for_a_position_with_no_starters(caplog):
+    blended = pl.DataFrame({"player_id": ["p1"], "position": ["P"], "EP": [10.0]})
+    adp = pl.DataFrame({"player_id": ["p9"], "position": ["WR"], "adp": [1]})
+
+    with caplog.at_level(logging.WARNING, logger=vor.__name__):
+        result = vor.compute_vor(
+            blended,
+            adp,
+            teams=10,
+            roster_config=RosterConfig(starters=MappingProxyType({})),
+        )
+
+    assert "VOR stays null" in caplog.text
+    assert result["VOR"][0] is None

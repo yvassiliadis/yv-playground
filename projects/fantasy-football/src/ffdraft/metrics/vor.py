@@ -27,6 +27,7 @@ pipeline):
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
 import numpy as np
@@ -35,7 +36,20 @@ from scipy.stats import spearmanr
 
 from ffdraft.config import DEFAULT_ROSTER_CONFIG, TEAMS, RosterConfig
 
+logger = logging.getLogger(__name__)
+
 ROUNDS_PER_TEAM = 10
+
+#: Fixed replacement rank for K/DST (see this module's docstring).
+#:
+#: KNOWN LIMITATION -- kickers: no source module in `ffdraft.sources` fetches
+#: K-position projections at all (none of the eight sources' position
+#: id/path/query constants include K), so `blend.apply_blend` emits no K rows
+#: and this constant currently only ever applies to DST in practice. The
+#: board will have zero kicker rows until a future task adds a
+#: kicker-projecting source; `derive.derive_kicker_fg_buckets` is ready to
+#: split that source's total-FG stat into scoring buckets once it exists.
+#: This is documented in the project README as a known gap.
 K_DST_REPLACEMENT_N = 5
 K_DST_POSITIONS = frozenset({"K", "DST"})
 
@@ -86,7 +100,10 @@ def _replacement_ep_by_position(
 
 
 def compute_vor(
-    blended: pl.DataFrame, adp: pl.DataFrame, teams: int = TEAMS
+    blended: pl.DataFrame,
+    adp: pl.DataFrame,
+    teams: int = TEAMS,
+    roster_config: RosterConfig = DEFAULT_ROSTER_CONFIG,
 ) -> pl.DataFrame:
     """Add `VOR = EP - EP_replacement` to `blended`.
 
@@ -94,6 +111,21 @@ def compute_vor(
     output). `adp` needs `player_id`, `position`, `adp` (lower = drafted
     earlier) and is used only to size `N_pos` -- ranking for the replacement
     player itself is always by `EP`, not by ADP.
+
+    Positions with no ADP representation
+    ------------------------------------
+    A position that is in `blended` but has zero rows in the top-`teams *
+    ROUNDS_PER_TEAM` ADP pool (a hand-maintained ADP file missing TEs, say)
+    used to get `N_pos = 0`, which skipped it in the replacement-EP
+    calculation and left every player at that position with a null `VOR`,
+    sorted silently to the bottom of the board. That is a data gap, not a
+    modelling result, so it is now both **logged as a warning** and **filled
+    in** from `roster_math_replacement`'s non-ADP rule
+    (`teams * roster_config.starters_at(position)`) -- the project already
+    trusts that rule as an independent replacement-level estimate, so using
+    it here is a real answer rather than a null, while the warning keeps the
+    substitution visible. If that rule also yields 0 (a position with no
+    starting slot at all), `VOR` stays null and the warning says so.
     """
     pool_size = teams * ROUNDS_PER_TEAM
     top_pool = adp.sort("adp").head(pool_size)
@@ -102,14 +134,28 @@ def compute_vor(
     )
 
     ranked = _ranked_by_ep(blended)
-    n_by_position = {
-        position: (
-            K_DST_REPLACEMENT_N
-            if position in K_DST_POSITIONS
-            else adp_counts.get(position, 0)
-        )
-        for position in ranked["position"].unique().to_list()
-    }
+    n_by_position: dict[str, int] = {}
+    for position in ranked["position"].unique().to_list():
+        if position in K_DST_POSITIONS:
+            n_by_position[position] = K_DST_REPLACEMENT_N
+            continue
+        n = adp_counts.get(position, 0)
+        if n <= 0:
+            n = teams * roster_config.starters_at(position)
+            logger.warning(
+                "compute_vor: position %r has no players in the top-%d ADP "
+                "pool -- this is an ADP data gap, not a modelling result. %s",
+                position,
+                pool_size,
+                (
+                    f"Falling back to the roster-math replacement rank N={n} "
+                    "(teams * starters)."
+                    if n > 0
+                    else "It also has no starting slot in roster_config, so "
+                    "VOR stays null for every player at this position."
+                ),
+            )
+        n_by_position[position] = n
     replacement = _replacement_ep_by_position(ranked, n_by_position)
 
     return (

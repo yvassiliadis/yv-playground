@@ -691,6 +691,10 @@ class QuantileBlend(_FittableMixin):
     `prediction_p75`. The three are sorted row-wise afterwards so quantile
     crossing -- independently fitted quantiles occasionally coming out in the
     wrong order -- can never produce a floor above a ceiling.
+
+    When this calibrator degrades to `EqualWeightMean` (sparse position/era,
+    see `_FittableMixin._use_fallback`), `prediction_p25`/`prediction_p75`
+    come back **null**, not aliased to the point estimate -- see `predict()`.
     """
 
     name = "QuantileBlend"
@@ -745,10 +749,17 @@ class QuantileBlend(_FittableMixin):
         if self.fallback_ is None and not self.models_:
             raise RuntimeError("QuantileBlend.predict called before fit")
         if self.fallback_ is not None:
+            # Degraded to EqualWeightMean: there is no fitted quantile model,
+            # so there is no floor/ceiling estimate to report. Emit nulls, NOT
+            # the point estimate aliased into both columns -- aliasing makes
+            # `p75 - p25 == 0`, which `metrics.vor.risk_adjusted_vor` would
+            # read as "confidently zero variance" and rank above players with
+            # real, non-zero variance. Null is what "unknown" looks like, and
+            # `risk_adjusted_vor` already falls through to `stddev` for it.
             fallback = self.fallback_.predict(df)
             return fallback.with_columns(
-                pl.col(PREDICTION_COLUMN).alias("prediction_p25"),
-                pl.col(PREDICTION_COLUMN).alias("prediction_p75"),
+                pl.lit(None, dtype=pl.Float64).alias("prediction_p25"),
+                pl.lit(None, dtype=pl.Float64).alias("prediction_p75"),
             )
         if df.height == 0:
             empty = np.empty(0, dtype=float)

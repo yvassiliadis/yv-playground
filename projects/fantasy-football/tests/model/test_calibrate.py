@@ -287,6 +287,24 @@ def test_quantile_blend_returns_three_ordered_columns():
     assert np.all(low <= mid) and np.all(mid <= high)
 
 
+def test_degraded_quantile_blend_emits_null_quantiles_not_a_zero_width_band():
+    """A QuantileBlend that fell back to EqualWeightMean has no floor/ceiling
+    estimate. Aliasing the point prediction into both would make
+    `p75 - p25 == 0`, which `metrics.vor.risk_adjusted_vor` reads as
+    "confidently risk-free" -- exactly the ranking bug it exists to prevent."""
+    sparse = _synthetic_training_frame(n=5)
+    model = calibrate.QuantileBlend(n_estimators=10)
+    model.fit(sparse)
+
+    assert model.is_fallback
+    predicted = model.predict(sparse)
+
+    assert predicted["prediction"].null_count() == 0
+    assert predicted["prediction_p25"].null_count() == predicted.height
+    assert predicted["prediction_p75"].null_count() == predicted.height
+    assert predicted.schema["prediction_p25"] == pl.Float64
+
+
 # ---------------------------------------------------------------------------
 # Recency weighting.
 # ---------------------------------------------------------------------------
@@ -644,3 +662,33 @@ def test_build_training_frame_derives_prior_season_features():
 
     assert frame["prior_actual_points"].to_list() == [None, pytest.approx(35.0)]
     assert frame["prior_games_played"].to_list() == [None, pytest.approx(1.0)]
+
+
+def test_seasonal_totals_does_not_double_count_repeated_snapshots():
+    """Regression: two `ingest snapshot` runs of one season/source must not
+    double the seasonal total `build_training_frame` fits against."""
+
+    def _rows(snapshot_date: str) -> pl.DataFrame:
+        return pl.DataFrame(
+            [
+                {
+                    "season": 2024,
+                    "week": 0,
+                    "source": "sleeper",
+                    "snapshot_date": snapshot_date,
+                    "player_id": "wr1",
+                    "position": "WR",
+                    "stat_name": "reception",
+                    "stat_value": 80.0,
+                }
+            ]
+        )
+
+    once = calibrate._seasonal_totals(_rows("2024-08-01"), {"reception": 0.5})
+    twice = calibrate._seasonal_totals(
+        pl.concat([_rows("2024-08-01"), _rows("2024-08-15")]), {"reception": 0.5}
+    )
+
+    assert once["fantasy_points"][0] == pytest.approx(40.0)
+    assert twice.height == 1
+    assert twice["fantasy_points"][0] == pytest.approx(40.0)
