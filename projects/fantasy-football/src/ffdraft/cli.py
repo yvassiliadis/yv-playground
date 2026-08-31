@@ -55,8 +55,10 @@ def ingest_actuals(
     other option considered, but a single accumulating file per season
     keeps the partition layout simple for downstream readers -- one file to
     scan per season -- at the cost of the raw layer potentially containing
-    duplicate rows across repeated runs, which downstream consumers should
-    dedupe on `snapshot_date` if that matters for their use case.)
+    duplicate rows across repeated runs.) Those duplicates are handled
+    downstream by `ffdraft.scoring.latest_snapshot_rows`, which
+    `scoring.score()` applies to every frame it scores, so a repeated ingest
+    never double-counts.
     """
     season_list = _parse_seasons(seasons)
     combined = pl.concat(

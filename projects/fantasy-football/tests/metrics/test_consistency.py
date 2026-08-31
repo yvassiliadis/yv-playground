@@ -126,3 +126,25 @@ def test_rejects_multiple_actual_sources():
     )
     with pytest.raises(ValueError, match="exactly one source"):
         consistency.compute_consistency(weekly, [2024], RULES)
+
+
+def test_compute_consistency_does_not_double_count_repeated_actuals_ingests():
+    """`ingest actuals` appends to the season file; re-running it must not
+    double a player's weekly fantasy points (which would inflate stddev)."""
+    weeks = _weekly_rows(
+        [
+            (2024, week, "wr1", "WR", value)
+            for week, value in enumerate([10.0, 14.0, 8.0, 12.0], start=1)
+        ]
+    )
+    reingested = pl.concat(
+        [weeks, weeks.with_columns(pl.lit("2025-02-01").alias("snapshot_date"))],
+        how="vertical",
+    )
+
+    once = consistency.compute_consistency(weeks, [2024], RULES)
+    twice = consistency.compute_consistency(reingested, [2024], RULES)
+
+    assert once["stddev"][0] == pytest.approx(np.std([10.0, 14.0, 8.0, 12.0], ddof=1))
+    assert twice["stddev"][0] == pytest.approx(once["stddev"][0])
+    assert twice["ceiling"][0] == pytest.approx(once["ceiling"][0])

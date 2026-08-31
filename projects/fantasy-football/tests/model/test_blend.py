@@ -267,3 +267,27 @@ def test_apply_blend_leaves_ep_quantiles_null_when_only_ep_has_a_fallback(tmp_pa
     assert row["EP"] == pytest.approx(80.0)  # filled from the espn-only fallback
     assert row["EP_p25"] is None
     assert row["EP_p75"] is None
+
+
+def test_wide_projections_does_not_double_count_repeated_snapshots(tmp_path):
+    """Two `ingest snapshot` runs for the same season/source must not double EP.
+
+    Regression for the append-only raw layer: `_wide_projections` group-by-sums
+    across every `snap_<date>.parquet` a glob picked up.
+    """
+    first_run = _long_rows(
+        [
+            (2025, 0, "sleeper", "wr1", "WR", "reception", 100),
+            (2025, 0, "espn", "wr1", "WR", "reception", 90),
+        ]
+    )
+    second_run = first_run.with_columns(pl.lit("2025-08-15").alias("snapshot_date"))
+    both_runs = pl.concat([first_run, second_run], how="vertical")
+
+    once = blend._wide_projections(first_run, RULES)
+    twice = blend._wide_projections(both_runs, RULES)
+
+    assert once["proj_sleeper"][0] == pytest.approx(50.0)
+    assert twice.height == once.height
+    assert twice["proj_sleeper"][0] == pytest.approx(once["proj_sleeper"][0])
+    assert twice["proj_espn"][0] == pytest.approx(once["proj_espn"][0])

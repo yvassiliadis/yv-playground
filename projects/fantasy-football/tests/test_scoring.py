@@ -91,3 +91,87 @@ def test_score_treats_all_sources_identically():
         row["source"]: row["fantasy_points"] for row in result.iter_rows(named=True)
     }
     assert totals == {"actuals": 30.0, "some_source": 30.0}
+
+
+# ---------------------------------------------------------------------------
+# Repeated-snapshot dedupe (C1).
+# ---------------------------------------------------------------------------
+
+
+def _snapshot_row(snapshot_date, stat_name, stat_value, source="sleeper"):
+    return {
+        "season": 2025,
+        "week": 0,
+        "source": source,
+        "snapshot_date": snapshot_date,
+        "player_id": "mahomes",
+        "stat_name": stat_name,
+        "stat_value": stat_value,
+    }
+
+
+def test_score_does_not_double_count_two_snapshots_of_the_same_season():
+    """Two `ingest snapshot` runs for one season/source must not double EP."""
+    one_run = pl.DataFrame(
+        [
+            _snapshot_row("2025-08-01", "passing yard", 4000.0),
+            _snapshot_row("2025-08-01", "passing td", 30.0),
+        ]
+    )
+    two_runs = pl.concat(
+        [
+            one_run,
+            pl.DataFrame(
+                [
+                    _snapshot_row("2025-08-08", "passing yard", 4000.0),
+                    _snapshot_row("2025-08-08", "passing td", 30.0),
+                ]
+            ),
+        ]
+    )
+
+    single = scoring.score(one_run, RULES)["fantasy_points"][0]
+    doubled = scoring.score(two_runs, RULES)["fantasy_points"][0]
+
+    assert single == 4000.0 * 0.04 + 30.0 * 6.0
+    assert doubled == single
+
+
+def test_score_uses_the_latest_snapshot_not_the_first():
+    df = pl.DataFrame(
+        [
+            _snapshot_row("2025-08-01", "passing yard", 4000.0),
+            _snapshot_row("2025-08-08", "passing yard", 5000.0),
+        ]
+    )
+
+    assert scoring.score(df, RULES)["fantasy_points"][0] == 5000.0 * 0.04
+
+
+def test_latest_snapshot_rows_is_per_source_not_global():
+    """A stale source keeps its own newest snapshot; it is not wiped out by a
+    fresher snapshot from a different source."""
+    df = pl.DataFrame(
+        [
+            _snapshot_row("2025-08-01", "passing yard", 4000.0, source="sleeper"),
+            _snapshot_row("2025-08-01", "passing yard", 3000.0, source="espn"),
+            _snapshot_row("2025-08-08", "passing yard", 3500.0, source="espn"),
+        ]
+    )
+
+    totals = {
+        row["source"]: row["fantasy_points"]
+        for row in scoring.score(df, RULES).iter_rows(named=True)
+    }
+    assert totals == {"sleeper": 4000.0 * 0.04, "espn": 3500.0 * 0.04}
+
+
+def test_latest_snapshot_rows_no_ops_without_a_snapshot_date_column():
+    df = pl.DataFrame(
+        [
+            _long_row(2023, 1, "actuals", "mahomes", "passing yard", 100.0),
+            _long_row(2023, 1, "actuals", "mahomes", "passing yard", 100.0),
+        ]
+    )
+
+    assert scoring.latest_snapshot_rows(df).height == 2
