@@ -1,5 +1,14 @@
 """FantasyPros seasonal projections source.
 
+============================================================================
+RULING: this source deviates from the task's "prefer a native-ID crosswalk
+join" requirement. It resolves `player_id` via `ids.crosswalk.resolve_by_name`
+(name+position+team matching), NOT via `fantasypros_id`. This is a
+deliberate, considered deviation, not an oversight -- see "Why this is out
+of scope" below for exactly what was checked and what closing the gap would
+require.
+============================================================================
+
 Fetches FantasyPros' public per-position CSV export
 (`fantasypros.com/nfl/projections/<position>.php?week=draft&export=xls` --
 despite the `xls` name, this returns CSV text, a long-standing quirk of that
@@ -41,14 +50,48 @@ itself may format numbers slightly differently, e.g. without thousands
 separators) -- treat the *shape* as verified and the specific *numbers* in
 the fixtures as illustrative.
 
-Deviation from the "prefer native-ID join" guidance: unlike Sleeper and
-ESPN, FantasyPros' CSV export does not expose FantasyPros' own player ID as
-a column (that only shows up embedded in the HTML report's per-row CSS
-class, `fp-id-<n>`, or in ESPN/Sleeper's respective native ID schemes, not
-this CSV) -- there is no `fantasypros_id`-shaped column to join against
-`ids.crosswalk.build_crosswalk()` here. This source therefore resolves
-`player_id` via `ids.crosswalk.resolve_by_name` instead, same as any other
-source without a native ID.
+Why this is out of scope (native-ID join deviation, in detail)
+---------------------------------------------------------------
+Unlike Sleeper and ESPN, the CSV/XLS export response itself has no ID
+column at all -- confirmed by inspecting the live column layout above,
+which is Player+Team followed only by stat columns, nothing else.
+
+FantasyPros' own player ID *does* exist and *is* publicly visible, but only
+as a CSS class (`fp-id-<n>`, e.g. `fp-id-17298` for Josh Allen) on the
+player-name `<a>` tag in the server-rendered HTML report page -- the same
+page that returns HTML instead of CSV for an unauthenticated `export=xls`
+request (see above). Extracting it therefore requires parsing that page's
+DOM, i.e. genuine HTML scraping. I checked for an alternative: the page's
+own JavaScript makes no `fetch()`/XHR call to a JSON projections endpoint to
+populate the table (checked the page's inline scripts for `fetch(`, `/api/`,
+`.json` references -- the only API calls found are unrelated, e.g.
+favorite-links bookmarking) -- the table is server-rendered directly into
+the HTML with no JSON API alternative to reach for the ID instead.
+
+This task's own scope statement is explicit that these three sources "have
+JSON/CSV APIs, no HTML scraping needed" -- FantasyPros' ID is only reachable
+by scraping, which contradicts that scope statement. Rather than silently
+add scraping (`beautifulsoup4`/`lxml` are already project dependencies, so
+it's technically easy) to a source this task defined as scrape-free, I kept
+the CSV-only implementation and its name-based fallback, and am flagging the
+gap explicitly here instead.
+
+**What a future task would need to do to close this gap:** add a
+`BeautifulSoup`/`lxml` parse step (either replacing the CSV fetch entirely,
+or run alongside it keyed by row order/player name) against
+`fantasypros.com/nfl/projections/<position>.php?week=draft` (the plain,
+unauthenticated HTML page -- no `export=xls`, which just redirects to this
+same page anyway without credentials), select each row's `.player-name`
+anchor, and pull the trailing digits off its `fp-id-<n>` CSS class via a
+regex. That ID is `ids.crosswalk.build_crosswalk()`'s `fantasypros_id`
+column, joinable exactly like `sleeper_id`/`espn_id` are here via
+`resolve_player_id_by_native_id`. Doing this would also incidentally fix the
+CSV-auth problem noted above, since the plain HTML report page requires no
+authentication at all -- only the `export=xls` CSV variant does.
+
+Until that happens, `player_id` here comes from
+`ids.crosswalk.resolve_by_name` instead, same as any other source without a
+usable native ID.
 
 Scope note: kicker ("k") projections are intentionally not fetched here.
 FantasyPros' basic CSV export reports raw field-goal/attempt counts with no

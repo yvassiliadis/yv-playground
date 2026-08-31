@@ -2,11 +2,23 @@
 
 `sample_response.json` is a trimmed set of *real* players captured from
 ESPN's live endpoint (see `ffdraft.sources.espn`'s module docstring) --
-Luther Burden III, Geno Smith, Omarion Hampton -- with two additions on top
-that don't come from the live response: Burden's second `stats` entry (a
-weekly-actual block, added to prove the season/week filter works) and the
-entire "Unrostered Rookie" player (added to exercise the unmatched-native-ID
-path).
+Luther Burden III, Geno Smith, Omarion Hampton -- with additions on top:
+
+- Burden's second `stats` entry (a weekly-actual block, fabricated to prove
+  the season/week filter works).
+- Geno Smith's second `stats` entry, a `seasonId=2025` season-total block
+  alongside his real `seasonId=2026` one. The *collision itself* is real
+  and live-confirmed: the actual live response for Geno Smith carried
+  exactly two blocks with identical `scoringPeriodId=0`/`statSourceId=1`,
+  differing only in `seasonId` (2026 and 2025) -- this is what the
+  `seasonId == season` check in `ffdraft.sources.espn._rows_from_payload`
+  guards against. The *specific numeric values* in the 2025 block here are
+  fabricated (not the real captured numbers, which weren't fully recorded
+  before being discarded) but deliberately distinct from the 2026 block's
+  real values, so a test asserting on the 2026 numbers would fail if the
+  season filter picked the wrong block.
+- The entire "Unrostered Rookie" player (fabricated, to exercise the
+  unmatched-native-ID path).
 """
 
 import json
@@ -106,6 +118,53 @@ class TestFetch:
         assert stats["passing yard"] == pytest.approx(3815.216003)
         assert stats["passing td"] == pytest.approx(20.4058202)
         assert stats["pass intercepted"] == pytest.approx(14.35380989)
+
+    def test_qb_passing_yards_are_plausible_for_a_starter(
+        self, monkeypatch, sample_payload, crosswalk_reference
+    ):
+        # Complements the exact-match assertion above with a plausibility
+        # check that isn't keyed to the same live capture used to derive
+        # the stat-ID mapping in the first place -- an exact-match test
+        # alone can't independently catch a future ID-shift regression
+        # (e.g. if "3" stopped meaning passing yards, an exact-match test
+        # against a hand-copied constant would still need updating by hand,
+        # but a range check catches wildly-wrong values like the original
+        # reception-ID bug even without knowing the exact right answer).
+        _mock_client(monkeypatch, sample_payload)
+        monkeypatch.setattr(espn, "build_crosswalk", lambda: crosswalk_reference)
+
+        result = ESPNSource().fetch(season=2026)
+
+        smith = result.filter(pl.col("source_player_id") == "15864")
+        stats = dict(zip(smith["stat_name"], smith["stat_value"]))
+        assert 3000 <= stats["passing yard"] <= 5000
+        assert 0 <= stats["passing td"] <= 60
+        assert 0 <= stats["pass intercepted"] <= 30
+
+    def test_season_collision_uses_the_requested_seasons_block(
+        self, monkeypatch, sample_payload, crosswalk_reference
+    ):
+        # Regression test for a real bug: Geno Smith's fixture carries two
+        # stats entries with the identical scoringPeriodId=0/statSourceId=1
+        # shape, differing only in seasonId (2026 and a fabricated-but-
+        # distinct 2025). Removing the `seasonId == season` guard in
+        # `_rows_from_payload` would make this test fail (it would either
+        # pick whichever block happens to come first, or double-count both).
+        _mock_client(monkeypatch, sample_payload)
+        monkeypatch.setattr(espn, "build_crosswalk", lambda: crosswalk_reference)
+
+        result_2026 = ESPNSource().fetch(season=2026)
+        smith_2026 = result_2026.filter(pl.col("source_player_id") == "15864")
+        stats_2026 = dict(zip(smith_2026["stat_name"], smith_2026["stat_value"]))
+        assert stats_2026["passing yard"] == pytest.approx(3815.216003)
+
+        result_2025 = ESPNSource().fetch(season=2025)
+        smith_2025 = result_2025.filter(pl.col("source_player_id") == "15864")
+        stats_2025 = dict(zip(smith_2025["stat_name"], smith_2025["stat_value"]))
+        assert stats_2025["passing yard"] == pytest.approx(4224.622681)
+
+        # the two seasons' blocks must not bleed into each other
+        assert stats_2026["passing yard"] != stats_2025["passing yard"]
 
     def test_resolves_team_via_pro_team_map(
         self, monkeypatch, sample_payload, crosswalk_reference
