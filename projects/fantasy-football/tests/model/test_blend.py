@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -125,6 +126,29 @@ def test_apply_blend_rejects_schema_version_mismatch(tmp_path):
         blend.apply_blend(projections, bad_path, RULES)
 
 
+def test_apply_blend_raises_a_clear_error_when_the_artifact_is_missing(tmp_path):
+    missing_path = tmp_path / "does_not_exist.parquet"
+    projections = _long_rows([(2025, 0, "sleeper", "p1", "WR", "reception", 80)])
+    with pytest.raises(blend.BlendArtifactError, match="no source_weights.parquet"):
+        blend.apply_blend(projections, missing_path, RULES)
+
+
+def test_apply_blend_raises_a_clear_error_when_schema_version_column_is_missing(
+    tmp_path,
+):
+    """A pre-schema_version artefact (older than schema versioning itself) has
+    no schema_version column at all -- the version-mismatch check can't even
+    run, so this needs its own explicit guard."""
+    path = _write_equal_weight_weights(tmp_path)
+    weights_df = calibrate.load_source_weights(path).drop("schema_version")
+    no_version_path = tmp_path / "no_schema_version.parquet"
+    weights_df.write_parquet(no_version_path)
+
+    projections = _long_rows([(2025, 0, "sleeper", "p1", "WR", "reception", 80)])
+    with pytest.raises(blend.BlendArtifactError, match="schema_version"):
+        blend.apply_blend(projections, no_version_path, RULES)
+
+
 def test_apply_blend_raises_a_clear_error_on_a_corrupt_pickle(tmp_path):
     path = _write_equal_weight_weights(tmp_path)
     weights_df = calibrate.load_source_weights(path).with_columns(
@@ -160,3 +184,86 @@ def test_apply_blend_uses_equal_weight_mean_for_a_position_with_no_winner(tmp_pa
     result = blend.apply_blend(projections, path, RULES)
     ep = result.filter(pl.col("player_id") == "k1")["EP"][0]
     assert ep == pytest.approx((10 * 0.5 + 12 * 0.5) / 2)
+
+
+# ---------------------------------------------------------------------------
+# QuantileBlend seam: EP_p25/EP_p75 flow from calibrate.py through blend.py.
+# ---------------------------------------------------------------------------
+
+
+def test_apply_blend_quantile_blend_winner_brackets_ep_with_p25_p75(tmp_path):
+    """A real (non-degraded) QuantileBlend winner must produce EP_p25 <= EP
+    <= EP_p75 in apply_blend's output -- this is the one cross-task seam
+    (calibrate.py's QuantileBlend -> blend.py's rename -> vor.py's
+    risk_adjusted_vor) with no other coverage."""
+    rng = np.random.default_rng(3)
+    n = 80
+    latent = rng.normal(160.0, 40.0, size=n)
+    train_df = pl.DataFrame(
+        {
+            "season": [2023] * (n // 2) + [2024] * (n // 2),
+            "player_id": [f"p{i}" for i in range(n)],
+            "position": ["WR"] * n,
+            "proj_sleeper": latent + rng.normal(0.0, 10.0, size=n),
+            "proj_espn": latent + rng.normal(0.0, 15.0, size=n),
+            "actual_points": latent + rng.normal(0.0, 8.0, size=n),
+        }
+    )
+    calibrators = {"QuantileBlend": calibrate.QuantileBlend(n_estimators=30)}
+    loso = calibrate.run_loso_evaluation(train_df, calibrators)
+    weights_df = calibrate.fit_winning_calibrators(train_df, loso, calibrators)
+    assert not weights_df.filter(pl.col("position") == "WR")["is_fallback"][0]
+    path = tmp_path / "source_weights.parquet"
+    calibrate.write_source_weights(weights_df, path)
+
+    projections = _long_rows(
+        [
+            (2025, 0, "sleeper", "x1", "WR", "reception", 80),
+            (2025, 0, "espn", "x1", "WR", "reception", 85),
+        ]
+    )
+    result = blend.apply_blend(projections, path, {"reception": 1.0})
+
+    row = result.filter(pl.col("player_id") == "x1").row(0, named=True)
+    assert "EP_p25" in result.columns
+    assert "EP_p75" in result.columns
+    assert row["EP_p25"] <= row["EP"] <= row["EP_p75"]
+
+
+def test_apply_blend_leaves_ep_quantiles_null_when_only_ep_has_a_fallback(tmp_path):
+    """When the winning calibrator recognises none of this season's sources
+    (e.g. a source it was trained on is discontinued and a new one appears),
+    it returns null for every row of the position, including EP_p25/EP_p75.
+    apply_blend's coverage<1.0 fallback fills EP from an independent
+    equal-weight mean over whatever sources ARE present this season, but
+    must not fabricate EP_p25/EP_p75 -- those columns should stay null so
+    `risk_adjusted_vor` treats this player's variance as unknown, not zero
+    (see vor.risk_adjusted_vor's docstring)."""
+    train_df = pl.DataFrame(
+        {
+            "season": [2023, 2024, 2023, 2024],
+            "player_id": ["x1", "x1", "x2", "x2"],
+            "position": ["WR", "WR", "WR", "WR"],
+            "proj_sleeper": [80.0, 85.0, 40.0, 42.0],
+            "proj_fantasypros": [90.0, 95.0, 42.0, 44.0],
+            "actual_points": [85.0, 88.0, 41.0, 45.0],
+        }
+    )
+    calibrators = {"QuantileBlend": calibrate.QuantileBlend()}
+    loso = calibrate.run_loso_evaluation(train_df, calibrators)
+    weights_df = calibrate.fit_winning_calibrators(train_df, loso, calibrators)
+    # This tiny fixture is well below MIN_FIT_ROWS, so the winner degrades to
+    # an EqualWeightMean fitted on {sleeper, fantasypros}.
+    assert weights_df.filter(pl.col("position") == "WR")["is_fallback"][0]
+    path = tmp_path / "source_weights.parquet"
+    calibrate.write_source_weights(weights_df, path)
+
+    # This season only "espn" data exists for this position -- a source the
+    # pickled model never saw, so it recognises zero present sources.
+    projections = _long_rows([(2025, 0, "espn", "p1", "WR", "reception", 80)])
+    result = blend.apply_blend(projections, path, {"reception": 1.0})
+
+    row = result.filter(pl.col("player_id") == "p1").row(0, named=True)
+    assert row["EP"] == pytest.approx(80.0)  # filled from the espn-only fallback
+    assert row["EP_p25"] is None
+    assert row["EP_p75"] is None

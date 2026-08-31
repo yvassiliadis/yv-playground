@@ -9,6 +9,15 @@
                  here so `ceiling` sits on the same quartile grid as `floor`
                  -- both come from a `quantile()` call at a matching
                  percentile rather than mixing quartiles and deciles).
+                 Both use `interpolation="linear"` explicitly: Polars'
+                 `quantile()` defaults to `"nearest"`, which disagrees with
+                 `numpy.percentile`'s (and most readers') default "linear"
+                 interpolation for non-integer ranks -- e.g. for `[1,2,3,4]`,
+                 "nearest" gives p25/p75 of `2.0`/`3.0` while "linear" gives
+                 `1.75`/`3.25`. "linear" is used here so `floor`/`ceiling`
+                 match the intuitive "p25/p75 week" reading and
+                 `numpy.percentile`, which is what a caller would reach for
+                 to sanity-check this by hand.
 * `pct_weeks_above_baseline` -- fraction of the player's weeks scoring above
   that week's positional-starter baseline: the median score, within that
   same week and position, among the top `starters x teams` scorers (from
@@ -28,10 +37,14 @@ the table, not to this function.
 
 from __future__ import annotations
 
+import logging
+
 import polars as pl
 
 from ffdraft import scoring
 from ffdraft.config import DEFAULT_ROSTER_CONFIG, TEAMS, RosterConfig
+
+logger = logging.getLogger(__name__)
 
 #: Below this many scored weeks, stddev/floor/ceiling/pct-above-baseline are
 #: statistically meaningless (a two-week stddev is noise dressed up as a
@@ -56,9 +69,17 @@ def _weekly_baseline(
     scored: pl.DataFrame, roster_config: RosterConfig, teams: int
 ) -> pl.DataFrame:
     """Median score of the top `starters * teams` players, per season/week/position."""
+    positions = [p for p in scored["position"].unique().to_list() if p is not None]
+    unconfigured = [p for p in positions if roster_config.starters_at(p) == 0]
+    if unconfigured:
+        logger.warning(
+            "compute_consistency: position(s) %s have no starters entry in "
+            "roster_config -- their baseline falls back to the single top "
+            "scorer that week (N clipped to 1), not a real starters*teams count",
+            sorted(unconfigured),
+        )
     starter_counts = {
-        position: teams * roster_config.starters_at(position)
-        for position in scored["position"].unique().to_list()
+        position: teams * roster_config.starters_at(position) for position in positions
     }
     ranked = scored.sort(
         ["season", "week", "position", "fantasy_points"],
@@ -123,8 +144,10 @@ def compute_consistency(
     per_player = with_baseline.group_by(["player_id", "position"]).agg(
         pl.len().alias("_n_weeks"),
         pl.col("fantasy_points").std().alias("stddev"),
-        pl.col("fantasy_points").quantile(0.25).alias("floor"),
-        pl.col("fantasy_points").quantile(0.75).alias("ceiling"),
+        pl.col("fantasy_points").quantile(0.25, interpolation="linear").alias("floor"),
+        pl.col("fantasy_points")
+        .quantile(0.75, interpolation="linear")
+        .alias("ceiling"),
         (pl.col("fantasy_points") > pl.col("_baseline"))
         .mean()
         .alias("pct_weeks_above_baseline"),

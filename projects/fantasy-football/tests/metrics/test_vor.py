@@ -123,6 +123,63 @@ def test_risk_adjusted_vor_falls_back_to_stddev_column():
     assert result["risk_adjusted_vor"][0] == pytest.approx(20.0 - 2.0 * 5.0)
 
 
+def test_risk_adjusted_vor_treats_a_coverage_gap_as_unknown_not_risk_free():
+    """A player whose EP came from blend.py's coverage<1.0 fallback (see
+    test_blend.py's test_apply_blend_leaves_ep_quantiles_null_when_only_ep_has_a_fallback)
+    has null EP_p25/EP_p75 alongside a real EP/VOR. Silently zero-filling
+    that null sigma would rank this player ABOVE an otherwise-identical
+    player with real, nonzero variance data -- exactly the failure mode this
+    function's docstring says it refuses to allow. It must come out null
+    instead, a visible "unknown" rather than a fabricated "risk-free"."""
+    df = pl.DataFrame(
+        {
+            "player_id": ["fallback_covered", "real_quantiles"],
+            "position": ["WR", "WR"],
+            "EP": [80.0, 80.0],
+            "VOR": [10.0, 10.0],
+            "EP_p25": [None, 70.0],
+            "EP_p75": [None, 90.0],
+        }
+    )
+    result = vor.risk_adjusted_vor(df, lambda_risk=1.0)
+
+    fallback_row = result.filter(pl.col("player_id") == "fallback_covered").row(
+        0, named=True
+    )
+    real_row = result.filter(pl.col("player_id") == "real_quantiles").row(0, named=True)
+    # Unknown, not a fabricated risk-free 0.0 -- a null can't be sorted above
+    # (or below) the real-quantile player's finite risk_adjusted_vor, which
+    # is exactly the point: a caller ranking by this column can no longer
+    # mistake "no data" for "no risk".
+    assert fallback_row["risk_adjusted_vor"] is None
+    assert real_row["risk_adjusted_vor"] is not None
+
+
+def test_risk_adjusted_vor_falls_back_to_stddev_per_row_when_quantiles_are_null():
+    """When a row's quantile columns are null but a stddev column is also
+    present (e.g. after joining metrics.consistency's output), that row
+    should use stddev rather than being left null -- the per-row fallback
+    priority, not an all-or-nothing per-frame choice."""
+    df = pl.DataFrame(
+        {
+            "player_id": ["a", "b"],
+            "position": ["WR", "WR"],
+            "EP": [80.0, 100.0],
+            "VOR": [10.0, 20.0],
+            "EP_p25": [None, 80.0],
+            "EP_p75": [None, 120.0],
+            "stddev": [4.0, 999.0],  # b has real quantiles, so its stddev is ignored
+        }
+    )
+    result = vor.risk_adjusted_vor(df, lambda_risk=1.0)
+
+    a = result.filter(pl.col("player_id") == "a").row(0, named=True)
+    b = result.filter(pl.col("player_id") == "b").row(0, named=True)
+    assert a["risk_adjusted_vor"] == pytest.approx(10.0 - 4.0)
+    sigma_b = (120.0 - 80.0) / 1.34898
+    assert b["risk_adjusted_vor"] == pytest.approx(20.0 - sigma_b)
+
+
 def test_risk_adjusted_vor_requires_a_variance_source():
     df = pl.DataFrame(
         {"player_id": ["a"], "position": ["WR"], "EP": [100.0], "VOR": [20.0]}
@@ -222,13 +279,20 @@ def test_positional_zscore_is_scoped_per_position():
 # ---------------------------------------------------------------------------
 
 
-def test_calibrate_lambda_risk_picks_a_candidate_from_the_grid():
+def test_calibrate_lambda_risk_picks_the_uniquely_best_candidate():
+    """VOR alone (lambda=0) ranks these players in the exact order they
+    actually finished; the two players with the highest VOR also have
+    outsized stddev, so penalising by any lambda > 0 scrambles that perfect
+    ranking. lambda=0.0 must therefore win uniquely -- a stub that always
+    returns e.g. `candidate_lambdas[0]` would only pass by coincidence here
+    since 0.0 also happens to be first, so this also checks lambda=2.0 (a
+    non-first, non-default candidate) loses too."""
     historical_df = pl.DataFrame(
         {
-            "VOR": [20.0, 15.0, 10.0, 5.0, 0.0, -5.0],
-            "stddev": [10.0, 2.0, 8.0, 1.0, 5.0, 1.0],
-            "actual_points": [90.0, 110.0, 70.0, 100.0, 60.0, 80.0],
+            "VOR": [50.0, 40.0, 30.0, 20.0, 10.0, 0.0],
+            "stddev": [100.0, 80.0, 60.0, 5.0, 3.0, 1.0],
+            "actual_points": [500.0, 400.0, 300.0, 200.0, 100.0, 0.0],
         }
     )
-    lam = vor.calibrate_lambda_risk(historical_df, candidate_lambdas=(0.0, 1.0, 2.0))
-    assert lam in (0.0, 1.0, 2.0)
+    lam = vor.calibrate_lambda_risk(historical_df, candidate_lambdas=(2.0, 1.0, 0.0))
+    assert lam == pytest.approx(0.0)

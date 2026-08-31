@@ -34,7 +34,12 @@ def _weekly_rows(rows: list[tuple]) -> pl.DataFrame:
 
 
 def test_stddev_floor_ceiling_match_hand_computed_values():
-    scores = [10.0, 20.0, 10.0, 20.0, 10.0]
+    # 6 distinct, non-symmetric values: p25/p75 fall strictly between two
+    # observations here, so linear and nearest interpolation genuinely
+    # disagree (numpy linear gives 8.75/20.25; Polars' "nearest" default
+    # would give 8.0/22.0) -- this fixture actually exercises
+    # `interpolation="linear"` rather than coincidentally matching both.
+    scores = [8.0, 15.0, 22.0, 6.0, 30.0, 11.0]
     weekly = _weekly_rows(
         [(2024, week, "p1", "WR", value) for week, value in enumerate(scores, start=1)]
     )

@@ -62,7 +62,21 @@ def _load_checked_calibrators(path: Path) -> dict[str, calibrate.Calibrator]:
     `calibrate.load_fitted_calibrators` does neither check -- see this
     module's docstring for why both matter here.
     """
-    weights_df = calibrate.load_source_weights(path)
+    try:
+        weights_df = calibrate.load_source_weights(path)
+    except FileNotFoundError as exc:
+        raise BlendArtifactError(
+            f"{path}: no source_weights.parquet found. Run calibration "
+            "(ffdraft.model.calibrate.run_calibration) to produce it first."
+        ) from exc
+
+    if "schema_version" not in weights_df.columns:
+        raise BlendArtifactError(
+            f"{path}: artefact has no schema_version column at all -- this is "
+            "from before schema versioning existed and predates the "
+            f"schema_version {calibrate.SOURCE_WEIGHTS_SCHEMA_VERSION} this "
+            "build of ffdraft expects. Re-run calibration to regenerate it."
+        )
 
     bad_versions = sorted(
         v

@@ -124,31 +124,48 @@ def risk_adjusted_vor(
 ) -> pl.DataFrame:
     """Add `risk_adjusted_vor = VOR - lambda_risk * sigma(EP)`.
 
-    `sigma(EP)` is read, in priority order:
+    `sigma(EP)` is read per row, in priority order:
 
     1. From `EP_p25`/`EP_p75` (the `QuantileBlend` floor/ceiling), converting
        the interquartile range to a normal-approximation sigma.
     2. From a `stddev` column (historical weekly variance, e.g. from
-       `metrics.consistency.compute_consistency`), used as-is.
+       `metrics.consistency.compute_consistency`).
 
-    Raises `ValueError` if `df` has neither -- there is no sigma estimate to
-    fall back to, and silently treating every player as risk-free would
-    misrepresent `risk_adjusted_vor` as MORE than `VOR` alone, when the
-    caller most likely just forgot to join a variance source in.
+    The two sources are combined per row, not per frame: a player whose
+    quantile columns are null -- e.g. a `QuantileBlend` winner that abstained
+    for that player and `blend.apply_blend` filled `EP` from its
+    `EqualWeightMean` fallback, which has no quantile output of its own --
+    falls through to `stddev` for THAT row even if other rows in the same
+    frame have real quantile data. A row with neither ends up with a null
+    `sigma_ep` and therefore a null `risk_adjusted_vor`, on purpose: treating
+    an unknown variance as `0.0` would rank that player as risk-free and
+    place them ABOVE otherwise-identical players with real variance data --
+    exactly the failure mode this function exists to avoid. A null
+    `risk_adjusted_vor` is a visible "insufficient data" signal a caller can
+    filter or fall back on; a fabricated `0.0` is not.
+
+    Raises `ValueError` if `df` has neither column at all -- there is no
+    sigma estimate anywhere to fall back to, and the caller most likely just
+    forgot to join a variance source in.
     """
-    if "EP_p25" in df.columns and "EP_p75" in df.columns:
-        sigma_expr = (pl.col("EP_p75") - pl.col("EP_p25")) / _IQR_TO_SIGMA
-    elif "stddev" in df.columns:
-        sigma_expr = pl.col("stddev")
-    else:
+    has_quantile = "EP_p25" in df.columns and "EP_p75" in df.columns
+    has_stddev = "stddev" in df.columns
+    if not has_quantile and not has_stddev:
         raise ValueError(
             "risk_adjusted_vor: df needs EP_p25/EP_p75 (QuantileBlend output) "
             "or a stddev column (metrics.consistency.compute_consistency output) "
             "to estimate sigma(EP)"
         )
 
+    if has_quantile:
+        sigma_expr = (pl.col("EP_p75") - pl.col("EP_p25")) / _IQR_TO_SIGMA
+        if has_stddev:
+            sigma_expr = sigma_expr.fill_null(pl.col("stddev"))
+    else:
+        sigma_expr = pl.col("stddev")
+
     return (
-        df.with_columns(sigma_expr.fill_null(0.0).alias("_sigma_ep"))
+        df.with_columns(sigma_expr.alias("_sigma_ep"))
         .with_columns(
             (pl.col("VOR") - lambda_risk * pl.col("_sigma_ep")).alias(
                 "risk_adjusted_vor"
