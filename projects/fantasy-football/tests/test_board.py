@@ -5,7 +5,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from ffdraft import board
+from ffdraft import board, derive
 
 RULES = {"reception": 1.0}
 
@@ -185,3 +185,116 @@ def test_build_board_includes_adp_and_alt_vor_columns(
     assert wr1_row["risk_adjusted_vor"] is not None
     assert wr1_row["roster_math_vor"] is not None
     assert wr1_row["positional_zscore"] is not None
+
+
+# ---------------------------------------------------------------------------
+# derive.py wiring (C2): the miss was the wiring, so these prove the wiring,
+# not derive.py's own already-tested maths.
+# ---------------------------------------------------------------------------
+
+
+def _projection_rows(rows: list[tuple]) -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {
+                "season": 2025,
+                "week": 0,
+                "source": source,
+                "snapshot_date": "2025-08-01",
+                "source_player_id": player_id,
+                "player_id": player_id,
+                "player_name_raw": player_id,
+                "team": "SF",
+                "position": position,
+                "stat_name": stat_name,
+                "stat_value": float(value),
+            }
+            for source, player_id, position, stat_name, value in rows
+        ]
+    )
+
+
+def test_build_board_feeds_derived_first_downs_into_apply_blend(
+    monkeypatch, blended_df, adp_df, tmp_path
+):
+    """`derive_first_downs` output must actually reach `apply_blend`'s input."""
+    captured: dict[str, pl.DataFrame] = {}
+
+    def _capture(projections, *a, **k):
+        captured["projections"] = projections
+        return blended_df
+
+    monkeypatch.setattr(board, "apply_blend", _capture)
+
+    projections = _projection_rows([("sleeper", "rb1", "RB", "rushing yard", 1000.0)])
+    # Historical rate: 100 first downs on 1000 rushing yards.
+    history = _projection_rows(
+        [
+            ("nflverse", "rb1", "RB", "rushing yard", 1000.0),
+            ("nflverse", "rb1", "RB", "rushing 1st down", 100.0),
+        ]
+    ).with_columns(pl.lit(2024).alias("season"), pl.lit(1).alias("week"))
+
+    board.build_board(
+        projections=projections,
+        weights_path=tmp_path / "unused.parquet",
+        adp=adp_df,
+        weekly_actuals=history,
+        consistency_seasons=[2024],
+        rules={"rushing yard": 0.1, "rushing 1st down": 0.5},
+        teams=1,
+    )
+
+    augmented = captured["projections"]
+    derived = augmented.filter(pl.col("stat_name") == "rushing 1st down")
+    assert derived.height == 1, "derive_first_downs output never reached apply_blend"
+    # Shrunk toward the positional mean, which here IS the player's own rate.
+    assert derived["stat_value"][0] == pytest.approx(100.0)
+    # The original rows are still there.
+    assert augmented.filter(pl.col("stat_name") == "rushing yard").height == 1
+
+
+def test_build_board_adds_dst_rows_derived_from_historical_team_stats(
+    monkeypatch, adp_df, tmp_path
+):
+    """FantasyPros is the only DST source and usually fails, so the board must
+    fall back to `derive.derive_dst_seasonal_ep` rather than shipping no DSTs."""
+    blended_without_dst = _blended([(2025, "wr1", "WR", 200.0, "SF", "WR One")])
+    monkeypatch.setattr(board, "apply_blend", lambda *a, **k: blended_without_dst)
+
+    dst_history = pl.DataFrame(
+        [
+            {
+                "season": 2024,
+                "week": week,
+                "source": "nflverse",
+                "snapshot_date": "2025-01-01",
+                "source_player_id": "DST_SF",
+                "player_id": "DST_SF",
+                "player_name_raw": "SF",
+                "team": "SF",
+                "position": "DST",
+                "stat_name": "defense 3 and out",
+                "stat_value": 4.0,
+            }
+            for week in range(1, 5)
+        ]
+    )
+
+    result = board.build_board(
+        projections=pl.DataFrame(),
+        weights_path=tmp_path / "unused.parquet",
+        adp=adp_df,
+        weekly_actuals=dst_history,
+        consistency_seasons=[2024],
+        rules={"defense 3 and out": 0.25},
+        teams=1,
+    )
+
+    dst_rows = result.filter(pl.col("pos") == "DST")
+    assert dst_rows.height == 1, "no DST row was derived into the board"
+    row = dst_rows.row(0, named=True)
+    assert row["player"] == "SF DST"
+    assert row["team"] == "SF"
+    # 4 three-and-outs/game * 0.25 pts * 17 games.
+    assert row["ep"] == pytest.approx(4.0 * 0.25 * derive.GAMES_PER_SEASON)

@@ -14,6 +14,31 @@ about three gaps in the canonical stat vocabulary they can produce:
 
 This module derives each of those three stat families so the rest of the
 pipeline (`scoring.score()`, calibration) never has to special-case them.
+
+Where this module is wired in
+-----------------------------
+`board.build_board` is the single caller, via the two entry points at the
+bottom of each section:
+
+* `augment_projections()` -- called **before** `blend.apply_blend`, because
+  1st downs are canonical long-schema *stat rows* that have to flow through
+  `scoring.score()` with everything else. Each derived row keeps its parent
+  row's `source`, so every source's scored projection gains its own 1st-down
+  contribution and the per-source blend weights stay meaningful.
+* `derive_dst_seasonal_ep()` -- called **after** `apply_blend`, because it
+  returns fantasy points already, not stat rows: it is an EP-level estimate
+  used to fill in DSTs the blend could not produce.
+
+`model/calibrate.py` deliberately does NOT augment its training frame with
+`derive_first_downs`. The rate it derives comes from the same `actuals` frame
+that supplies the calibration target, so folding it into the training
+features would leak the predicted season's own 1st-down production into the
+features. The cost of that choice is a small scale mismatch -- board-time EP
+carries 1st-down points the calibrators were not fitted against -- which is
+acknowledged, uniform within a position, and therefore near-neutral for the
+within-position ranking the board is actually read for. Removing it properly
+needs a season-aware (`seasons < S` only) rate table, which is a future task.
+
 Every function here takes/returns plain `pl.DataFrame`s in the canonical
 long schema (`ingest.actuals.CANONICAL_COLUMNS`) -- no hidden I/O, no
 caching -- so `derive_first_downs` in particular can be replayed against
@@ -271,6 +296,38 @@ def derive_first_downs(
     return pl.concat(non_empty, how="vertical")
 
 
+_FIRST_DOWN_INPUT_COLUMNS = ("stat_name", "stat_value", "player_id", "position")
+
+
+def augment_projections(
+    projections: pl.DataFrame, historical_actuals: pl.DataFrame
+) -> pl.DataFrame:
+    """`projections` with derived 1st-down rows appended.
+
+    The pipeline entry point for `derive_first_downs` -- see this module's
+    docstring for why it belongs before the blend rather than after it.
+    Returns `projections` unchanged (rather than raising) when either frame
+    is empty or is missing the columns the derivation needs, so callers can
+    always route projections through this without pre-checking.
+    """
+    for frame in (projections, historical_actuals):
+        if frame.height == 0 or any(
+            c not in frame.columns for c in _FIRST_DOWN_INPUT_COLUMNS
+        ):
+            logger.info(
+                "augment_projections(): no usable 1st-down inputs; "
+                "returning projections unchanged"
+            )
+            return projections
+
+    derived = derive_first_downs(projections, historical_actuals)
+    if derived.is_empty():
+        return projections
+    return pl.concat(
+        [projections, derived.select(projections.columns)], how="vertical_relaxed"
+    )
+
+
 # ---------------------------------------------------------------------------
 # DST expected points
 # ---------------------------------------------------------------------------
@@ -340,6 +397,7 @@ def derive_dst_expected_points(
     historical_team_stats: pl.DataFrame,
     decay: float = 0.35,
     scoring_rules_path: Path = DEFAULT_SCORING_RULES_PATH,
+    rules: dict[str, float] | None = None,
 ) -> pl.DataFrame:
     """Decay-weighted historical per-game DST expected fantasy points.
 
@@ -421,8 +479,62 @@ def derive_dst_expected_points(
         pl.col("stat_value"),
     )
 
-    rules = scoring.load_scoring_rules(scoring_rules_path)
+    # `rules` lets a caller that already holds the league's scoring dict
+    # (e.g. `board.build_board`) pass it straight through, so the board and
+    # this derivation can never end up scored by two different rule sets.
+    if rules is None:
+        rules = scoring.load_scoring_rules(scoring_rules_path)
     return scoring.score(canonical, rules)
+
+
+#: Regular-season games per team. Used to turn `derive_dst_expected_points`'s
+#: per-average-game number into the seasonal EP the board works in.
+GAMES_PER_SEASON = 17
+
+_EMPTY_DST_EP_SCHEMA: dict[str, pl.DataType] = {
+    "player_id": pl.String,
+    "position": pl.String,
+    "EP": pl.Float64,
+}
+
+
+def derive_dst_seasonal_ep(
+    historical_team_stats: pl.DataFrame,
+    decay: float = 0.35,
+    scoring_rules_path: Path = DEFAULT_SCORING_RULES_PATH,
+    rules: dict[str, float] | None = None,
+    games: int = GAMES_PER_SEASON,
+) -> pl.DataFrame:
+    """`(player_id, position, EP)` seasonal DST expected points.
+
+    The pipeline entry point for `derive_dst_expected_points`: multiplies its
+    per-average-game number by `games` so the result is directly comparable
+    to `blend.apply_blend`'s seasonal `EP`. `board.build_board` uses it to
+    fill in defenses the blend could not produce -- FantasyPros is the only
+    source that projects DST at all, and it is the source most likely to fail
+    a live snapshot, so without this a failed FantasyPros fetch means a board
+    with no defenses on it.
+    """
+    if historical_team_stats.height == 0 or any(
+        c not in historical_team_stats.columns
+        for c in ("team", "season", "stat_name", "stat_value")
+    ):
+        return pl.DataFrame(schema=_EMPTY_DST_EP_SCHEMA)
+
+    per_game = derive_dst_expected_points(
+        historical_team_stats,
+        decay=decay,
+        scoring_rules_path=scoring_rules_path,
+        rules=rules,
+    )
+    if per_game.is_empty():
+        return pl.DataFrame(schema=_EMPTY_DST_EP_SCHEMA)
+
+    return per_game.select(
+        pl.col("player_id"),
+        pl.lit("DST").alias("position"),
+        (pl.col("fantasy_points") * games).alias("EP"),
+    ).sort("player_id")
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,31 @@ module therefore takes `adp` as a plain `pl.DataFrame` argument (`player_id`,
 is responsible for sourcing it, e.g. from a manually-maintained CSV, until a
 real ADP ingestion task exists.
 
+Derived stats (`ffdraft.derive`)
+-------------------------------
+Two of `derive.py`'s three families are wired in here, at two different
+points, because they are two different kinds of object:
+
+* **1st downs** (`derive.augment_projections`) are canonical long-schema
+  *stat rows*, so they are appended to `projections` **before**
+  `apply_blend`. They then flow through `scoring.score()` with every other
+  stat, per-source, and the existing blend weights apply to them unchanged.
+  Doing this after the blend would mean re-implementing scoring on an
+  EP-level frame. The historical rate base is `weekly_actuals` restricted to
+  `consistency_seasons` -- the same prior-season window the board already
+  trusts for variance, and strictly earlier than the season being drafted.
+* **DST expected points** (`derive.derive_dst_seasonal_ep`) are already
+  fantasy points, not stat rows, so they are merged in **after**
+  `apply_blend`: they fill a null `EP` for a defense the blend could not
+  score, and add board rows for defenses missing from the blend entirely.
+  This matters because FantasyPros is the only source that projects DST at
+  all and is also the source most likely to fail a live snapshot; without
+  this the board can come out with no defenses on it.
+
+`derive.derive_kicker_fg_buckets` is deliberately NOT wired in: no source
+module fetches kicker projections, so there is no total-FG stat to split. See
+the README's known-gaps section and `metrics/vor.py`'s `K_DST_REPLACEMENT_N`.
+
 Column semantics
 -----------------
 The plan's board spec names three "alt-VORs": risk-adjusted, dropoff, and
@@ -41,6 +66,7 @@ from pathlib import Path
 
 import polars as pl
 
+from ffdraft import derive
 from ffdraft.config import DEFAULT_ROSTER_CONFIG, TEAMS, RosterConfig
 from ffdraft.metrics.consistency import compute_consistency
 from ffdraft.metrics.vor import (
@@ -75,6 +101,44 @@ BOARD_COLUMNS = [
 ]
 
 
+def _merge_derived_dst(blended: pl.DataFrame, dst_ep: pl.DataFrame) -> pl.DataFrame:
+    """Fill/append DST rows in `blended` from `derive.derive_dst_seasonal_ep`.
+
+    Existing DST rows with a null `EP` are filled; defenses absent from
+    `blended` altogether get a new row. A defense the blend *did* score keeps
+    its own `EP` -- a real projection beats a historical extrapolation.
+    """
+    if dst_ep.height == 0 or blended.height == 0:
+        return blended
+
+    filled = blended.join(
+        dst_ep.select("player_id", pl.col("EP").alias("_derived_ep")),
+        on="player_id",
+        how="left",
+    )
+    filled = filled.with_columns(pl.col("EP").fill_null(pl.col("_derived_ep"))).drop(
+        "_derived_ep"
+    )
+
+    known = set(blended["player_id"].to_list())
+    missing = dst_ep.filter(~pl.col("player_id").is_in(known))
+    if missing.height == 0:
+        return filled
+
+    season = blended["season"].max() if "season" in blended.columns else None
+    additions = missing.select(
+        pl.lit(season, dtype=blended.schema.get("season", pl.Int64)).alias("season"),
+        pl.col("player_id"),
+        pl.col("position"),
+        pl.col("EP"),
+        pl.col("player_id").str.strip_prefix("DST_").alias("team"),
+        (pl.col("player_id").str.strip_prefix("DST_") + " DST").alias(
+            "player_name_raw"
+        ),
+    )
+    return pl.concat([filled, additions], how="diagonal_relaxed")
+
+
 def build_board(
     projections: pl.DataFrame,
     weights_path: Path,
@@ -86,6 +150,7 @@ def build_board(
     roster_config: RosterConfig = DEFAULT_ROSTER_CONFIG,
     lambda_risk: float = DEFAULT_LAMBDA_RISK,
     picks_ahead: int = 10,
+    historical_team_stats: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Build the ranked draft board.
 
@@ -103,10 +168,33 @@ def build_board(
     fallback only works if `stddev` is already present when
     `risk_adjusted_vor` runs.
 
+    `historical_team_stats` is the canonical long-schema team-level DST
+    history `derive.derive_dst_seasonal_ep` reads; it defaults to the DST
+    rows of `weekly_actuals` over `consistency_seasons`, which is what
+    `ingest actuals` already writes.
+
     Returns one row per player, sorted by `vor` descending, with `rank`
     assigned from that order (1 = best `VOR`).
     """
-    blended = apply_blend(projections, weights_path, rules)
+    history = (
+        weekly_actuals.filter(pl.col("season").is_in(consistency_seasons))
+        if (weekly_actuals.height and "season" in weekly_actuals.columns)
+        else weekly_actuals
+    )
+
+    blended = apply_blend(
+        derive.augment_projections(projections, history), weights_path, rules
+    )
+
+    if historical_team_stats is None:
+        historical_team_stats = (
+            history.filter(pl.col("position") == "DST")
+            if "position" in history.columns
+            else history
+        )
+    blended = _merge_derived_dst(
+        blended, derive.derive_dst_seasonal_ep(historical_team_stats, rules=rules)
+    )
 
     consistency = compute_consistency(
         weekly_actuals,
@@ -120,7 +208,9 @@ def build_board(
         consistency, on=["player_id", "position"], how="left"
     )
 
-    scored = compute_vor(with_consistency, adp, teams=teams)
+    scored = compute_vor(
+        with_consistency, adp, teams=teams, roster_config=roster_config
+    )
     scored = risk_adjusted_vor(scored, lambda_risk=lambda_risk)
     scored = dropoff_value(scored, adp, picks_ahead=picks_ahead)
     scored = roster_math_replacement(scored, roster_config=roster_config, teams=teams)

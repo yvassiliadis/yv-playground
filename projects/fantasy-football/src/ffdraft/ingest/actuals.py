@@ -12,9 +12,6 @@ provides (its `gsis_id`-based `player_id` for players, and a synthetic
 `DST_<team>` id for defenses).
 
 Known gaps, deliberately NOT filled in here (left for Task 6 / derive.py):
-  - rushing/receiving 1st downs (nflreadpy exposes `rushing_first_downs` and
-    `receiving_first_downs`, but the scoring vocabulary's "1st down" stats
-    are derived play-by-play concepts that Task 6 owns)
   - DST granular stats: 3-and-outs, 4th-down stops, tackles for loss, and
     pass defended are not available from nflreadpy's team-level weekly
     stats
@@ -67,6 +64,13 @@ _PLAYER_STAT_MAP = {
     "receiving_yards": "receiving yard",
     "receiving_tds": "receiving td",
     "receiving_2pt_conversions": "receiving 2-pt conversion",
+    # nflreadpy does expose these two directly, and the scoring CSV rewards
+    # them at 0.5 each. `derive.derive_first_downs` needs them here as the
+    # historical base rate it shrinks and projects forward -- no projection
+    # source reports 1st downs, so without these rows every derived
+    # 1st-down projection would come out as a silent 0.0.
+    "rushing_first_downs": "rushing 1st down",
+    "receiving_first_downs": "receiving 1st down",
 }
 
 # Fumbles lost can occur on a sack, a rush, or a reception; the scoring CSV
@@ -127,11 +131,17 @@ def load_weekly_actuals(seasons: list[int]) -> pl.DataFrame:
 
 
 def _reshape_player_stats(raw: pl.DataFrame) -> pl.DataFrame:
+    # Only rename columns nflreadpy actually returned. Its schema varies a
+    # little by season (and test fixtures carry a subset), and a hard rename
+    # of an absent column would crash the whole ingest for one missing stat.
+    present_map = {k: v for k, v in _PLAYER_STAT_MAP.items() if k in raw.columns}
     df = raw.with_columns(
-        pl.sum_horizontal(_FUMBLE_LOST_COLS).alias("fumble lost")
-    ).rename(_PLAYER_STAT_MAP)
+        pl.sum_horizontal([c for c in _FUMBLE_LOST_COLS if c in raw.columns]).alias(
+            "fumble lost"
+        )
+    ).rename(present_map)
 
-    value_vars = list(_PLAYER_STAT_MAP.values()) + ["fumble lost"]
+    value_vars = list(present_map.values()) + ["fumble lost"]
     id_vars = ["season", "week", "player_id", "player_display_name", "team", "position"]
 
     long = df.select(id_vars + value_vars).unpivot(
