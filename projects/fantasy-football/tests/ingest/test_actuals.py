@@ -109,7 +109,12 @@ def test_load_weekly_actuals_calls_nflreadpy(monkeypatch, player_stats_fixture):
 
 @pytest.fixture
 def team_stats_fixture() -> pl.DataFrame:
-    """One game, two teams (KC home, DEN away)."""
+    """One game, two teams (KC home, DEN away).
+
+    KC records a defensive TD and a special-teams return TD (two distinct
+    TD types in the same week); DEN records a fumble-recovery TD. This
+    exercises all three canonical TD stats without any of them overlapping.
+    """
     return pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -123,7 +128,8 @@ def team_stats_fixture() -> pl.DataFrame:
             "def_interceptions": [2, 0],
             "fumble_recovery_opp": [1, 0],
             "def_tds": [1, 0],
-            "special_teams_tds": [0, 0],
+            "special_teams_tds": [1, 0],
+            "fumble_recovery_tds": [0, 1],
         }
     )
 
@@ -152,11 +158,13 @@ def test_reshape_dst_stats_counting_and_buckets(team_stats_fixture, schedules_fi
     kc = long.filter(pl.col("team") == "KC")
     kc_stats = dict(zip(kc["stat_name"], kc["stat_value"]))
 
-    # KC's defense: 3 sacks, 2 INTs, 1 fumble recovery, 1 defense TD
+    # KC's defense: 3 sacks, 2 INTs, 1 fumble recovery, 1 defense TD, 1 special teams TD
     assert kc_stats["sacks"] == 3.0
     assert kc_stats["defense interception"] == 2.0
     assert kc_stats["fumble recovery"] == 1.0
     assert kc_stats["defense td"] == 1.0
+    assert kc_stats["special teams td"] == 1.0
+    assert "fumble recovery td" not in kc_stats
 
     # KC allowed DEN's 180 pass + 70 rush = 250 yards, and DEN's score (10 pts)
     assert kc_stats["0-349 yds allowed"] == 1.0
@@ -164,11 +172,14 @@ def test_reshape_dst_stats_counting_and_buckets(team_stats_fixture, schedules_fi
 
     den = long.filter(pl.col("team") == "DEN")
     den_stats = dict(zip(den["stat_name"], den["stat_value"]))
-    # DEN's defense recorded 1 sack but no INTs/recoveries/TDs -> those rows are dropped
+    # DEN's defense recorded 1 sack and 1 fumble-recovery TD, but no INTs,
+    # fumble recoveries, defense TDs, or special-teams TDs -> those rows are dropped
     assert den_stats["sacks"] == 1.0
+    assert den_stats["fumble recovery td"] == 1.0
     assert "defense interception" not in den_stats
     assert "fumble recovery" not in den_stats
     assert "defense td" not in den_stats
+    assert "special teams td" not in den_stats
     # DEN allowed KC's 250 pass + 100 rush = 350 yards, and KC's score (30 pts)
     assert den_stats["350-399 yds allowed"] == 1.0
     assert den_stats["28-34 pts allowed"] == 1.0
@@ -203,3 +214,30 @@ def test_load_dst_actuals_calls_nflreadpy(
     assert captured["schedules_seasons"] == [2023]
     assert result.columns == actuals.CANONICAL_COLUMNS
     assert result.height > 0
+
+
+def test_reshape_dst_stats_skips_unresolved_game(schedules_fixture):
+    """A game_id missing from schedules (e.g. a bye week) must not fall into a bucket."""
+    team_stats = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "team": ["CHI"],
+            "opponent_team": ["MIA"],
+            "game_id": ["2023_01_CHI_MIA"],  # not present in schedules_fixture
+            "passing_yards": [200],
+            "rushing_yards": [80],
+            "def_sacks": [0],
+            "def_interceptions": [0],
+            "fumble_recovery_opp": [0],
+            "def_tds": [0],
+            "special_teams_tds": [0],
+            "fumble_recovery_tds": [0],
+        }
+    )
+
+    long = actuals._reshape_dst_stats(team_stats, schedules_fixture)
+
+    chi_stats = long.filter(pl.col("team") == "CHI")["stat_name"].to_list()
+    assert not any("pts allowed" in name for name in chi_stats)
+    assert not any("yds allowed" in name for name in chi_stats)

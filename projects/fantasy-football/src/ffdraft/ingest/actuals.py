@@ -20,6 +20,17 @@ Known gaps, deliberately NOT filled in here (left for Task 6 / derive.py):
     stats
   - FG-by-distance scoring buckets ("0-39 FG made", "40-49 FG made",
     "5+ FG made") are not mapped here
+  - "2-pt conversion return", "special teams forced fumble", and "special
+    teams fumble recovery" (scoring CSV stat names) have no corresponding
+    nflreadpy team-stat column and are not mapped here
+
+Known limitation: the points-allowed/yards-allowed bucketing below depends
+on a join against `load_schedules` and a self-join against `team_stats` for
+the opponent's game. If a game doesn't resolve (e.g. a bye week row, or a
+schedule/team-stats mismatch), the joined value is null; such rows are
+skipped entirely rather than falling into a bucket, so a missing bucket row
+for a team/week means the join didn't resolve -- not that 0 points/yards
+were allowed.
 """
 
 from __future__ import annotations
@@ -67,10 +78,19 @@ _FUMBLE_LOST_COLS = [
 ]
 
 # nflreadpy `load_team_stats` wide column -> canonical scoring-CSV stat_name.
+# def_tds, fumble_recovery_tds, and special_teams_tds were checked for
+# overlap (rows where more than one is nonzero in the same team-week): that
+# does happen, but it reflects a team scoring multiple distinct TDs of
+# different types in the same week (e.g. one pick-six and one fumble-return
+# TD), not double-counting of a single event -- each column is nflreadpy's
+# own independent counter, so all three map to their own canonical stat.
 _DST_COUNTING_STAT_MAP = {
     "def_sacks": "sacks",
     "def_interceptions": "defense interception",
     "fumble_recovery_opp": "fumble recovery",
+    "def_tds": "defense td",
+    "special_teams_tds": "special teams td",
+    "fumble_recovery_tds": "fumble recovery td",
 }
 
 _PTS_ALLOWED_BUCKETS = [
@@ -144,15 +164,9 @@ def load_dst_actuals(seasons: list[int]) -> pl.DataFrame:
 def _reshape_dst_stats(
     team_stats: pl.DataFrame, schedules: pl.DataFrame
 ) -> pl.DataFrame:
-    # Defensive/return TDs: def_tds covers defensive scores (pick-sixes,
-    # fumble return TDs credited to the defense), special_teams_tds covers
-    # kickoff/punt return TDs. Both are folded into the single "defense td"
-    # scoring stat.
-    counting = team_stats.with_columns(
-        (pl.col("def_tds") + pl.col("special_teams_tds")).alias("defense td")
-    ).rename(_DST_COUNTING_STAT_MAP)
+    counting = team_stats.rename(_DST_COUNTING_STAT_MAP)
 
-    counting_value_vars = list(_DST_COUNTING_STAT_MAP.values()) + ["defense td"]
+    counting_value_vars = list(_DST_COUNTING_STAT_MAP.values())
     counting_id_vars = ["season", "week", "team"]
     counting_long = counting.select(counting_id_vars + counting_value_vars).unpivot(
         index=counting_id_vars,
@@ -197,14 +211,18 @@ def _reshape_dst_stats(
         )
     )
 
+    # A null points_allowed/yards_allowed means the opponent-game join didn't
+    # resolve (e.g. a bye week, or a schedule/team-stats mismatch) -- skip
+    # bucketing entirely for that row rather than letting `_bucket_expr`
+    # silently fall through to the overflow bucket.
     bucket_long = pl.concat(
         [
-            merged.select(
-                "season", "week", "team", pl.col("pts_bucket").alias("stat_name")
-            ).with_columns(pl.lit(1.0).alias("stat_value")),
-            merged.select(
-                "season", "week", "team", pl.col("yds_bucket").alias("stat_name")
-            ).with_columns(pl.lit(1.0).alias("stat_value")),
+            merged.filter(pl.col("points_allowed").is_not_null())
+            .select("season", "week", "team", pl.col("pts_bucket").alias("stat_name"))
+            .with_columns(pl.lit(1.0).alias("stat_value")),
+            merged.filter(pl.col("yards_allowed").is_not_null())
+            .select("season", "week", "team", pl.col("yds_bucket").alias("stat_name"))
+            .with_columns(pl.lit(1.0).alias("stat_value")),
         ],
         how="vertical",
     )

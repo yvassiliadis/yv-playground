@@ -36,7 +36,18 @@ def ingest_actuals(
         help="Season range, e.g. 2008-2025, or comma-separated: 2023,2024",
     ),
 ) -> None:
-    """Ingest actual player and DST stats via nflreadpy, writing partitioned Parquet."""
+    """Ingest actual player and DST stats via nflreadpy, writing partitioned Parquet.
+
+    The raw layer is append-only: each season partition is a single
+    `actuals.parquet` file, and re-running this command for a season reads
+    whatever's already there and concatenates the newly-loaded rows onto it
+    rather than overwriting. (A snapshot-qualified filename per run was the
+    other option considered, but a single accumulating file per season
+    keeps the partition layout simple for downstream readers -- one file to
+    scan per season -- at the cost of the raw layer potentially containing
+    duplicate rows across repeated runs, which downstream consumers should
+    dedupe on `snapshot_date` if that matters for their use case.)
+    """
     season_list = _parse_seasons(seasons)
     combined = pl.concat(
         [load_weekly_actuals(season_list), load_dst_actuals(season_list)],
@@ -46,7 +57,12 @@ def ingest_actuals(
     for (season,), season_df in combined.group_by(["season"]):
         out_dir = RAW_ACTUALS_DIR / f"season={season}"
         out_dir.mkdir(parents=True, exist_ok=True)
-        season_df.write_parquet(out_dir / "actuals.parquet")
+        out_path = out_dir / "actuals.parquet"
+        if out_path.exists():
+            season_df = pl.concat(
+                [pl.read_parquet(out_path), season_df], how="vertical"
+            )
+        season_df.write_parquet(out_path)
 
     typer.echo(f"Wrote actuals for seasons: {season_list}")
 
