@@ -18,10 +18,12 @@ pivots long -> wide exactly once:
     position         str    QB/RB/WR/TE/K/DST
     proj_<source>    f64    that source's *scored* seasonal projection
     actual_points    f64    that player-season's *scored* actual points
-    games_played     f64    optional feature: games with recorded stats
-    prior_actual_points   f64  optional feature: season-1 actual points
-    prior_games_played    f64  optional feature: season-1 games played
-    age              f64    optional feature, only if the caller supplies it
+    games_played     f64    diagnostic ONLY -- games played in the season
+                            being predicted, so it is not a model feature
+                            (see EXTRA_FEATURE_COLUMNS)
+    prior_actual_points   f64  feature: season-1 actual points
+    prior_games_played    f64  feature: season-1 games played
+    age              f64    feature, only if the caller supplies it
                             (the pipeline has no birthdate source yet)
 
 Both the projection side and the actual side are scored with the *same*
@@ -83,9 +85,16 @@ KEY_COLUMNS = ["season", "player_id", "position"]
 
 #: Extra (non-source) feature columns used by the learned calibrators. Any of
 #: these that are absent from the training frame are simply not used.
+#:
+#: `games_played` is deliberately NOT here. The training frame carries it as a
+#: diagnostic, but it counts games in the season *being predicted*, which is
+#: near-deterministic of that season's fantasy points -- feeding it to the
+#: learned calibrators (and not to the weight-based ones) would hand them a
+#: leak and tilt LOSO winner selection for reasons unrelated to skill. It is
+#: also null for an upcoming season, so a model fitted on it would be applied
+#: by `blend.py` under a feature distribution it never saw.
 EXTRA_FEATURE_COLUMNS = (
     "age",
-    "games_played",
     "prior_games_played",
     "prior_actual_points",
 )
@@ -154,17 +163,38 @@ def build_training_frame(
     projections: pl.DataFrame,
     actuals: pl.DataFrame,
     rules: dict[str, float],
+    actual_source: str | None = None,
 ) -> pl.DataFrame:
     """Join scored projections to scored actuals into the wide training frame.
 
-    `projections` and `actuals` are both canonical long-schema frames;
-    `actuals` is expected to carry a single `source` (nflverse). Both are
-    scored through `ffdraft.scoring.score()` -- there is no second scoring
-    path here by design.
+    `projections` and `actuals` are both canonical long-schema frames. Both
+    are scored through `ffdraft.scoring.score()` -- there is no second
+    scoring path here by design.
+
+    `actuals` must carry exactly one `source` (nflverse). The target is
+    summed over weeks, so a frame containing two sources for the same
+    player-season would silently double the target; that is loud rather than
+    silent here. Pass `actual_source` to select one source out of a
+    multi-source frame instead.
 
     The join is an inner join on `(season, player_id)`: a projection with no
     actual has no target, and an actual with no projection has no features.
     """
+    if actual_source is not None:
+        actuals = actuals.filter(pl.col("source") == actual_source)
+        if actuals.height == 0:
+            raise ValueError(
+                f"build_training_frame: no actuals rows for source {actual_source!r}"
+            )
+
+    actual_sources = actuals["source"].unique().sort().to_list()
+    if len(actual_sources) > 1:
+        raise ValueError(
+            "build_training_frame: `actuals` must carry exactly one source "
+            f"(summing over weeks would double-count the target), got "
+            f"{actual_sources}. Pass actual_source=... to pick one."
+        )
+
     proj_totals = _seasonal_totals(projections, rules)
     actual_totals = _seasonal_totals(actuals, rules)
 
@@ -364,6 +394,14 @@ class _FittableMixin:
             reason,
             train_df.height,
         )
+        # With no proj_* columns the fallback cannot be fitted either. Raise
+        # naming the calibrator the caller actually asked for, so the error
+        # does not appear to come from EqualWeightMean out of nowhere.
+        if not projection_columns(train_df):
+            raise ValueError(
+                f"{self.name}.fit: no proj_* columns in training frame "
+                "(and so the EqualWeightMean fallback cannot be fitted either)"
+            )
         self.fallback_ = EqualWeightMean(lambda_=self.lambda_)
         self.fallback_.reference_season = self.reference_season
         self.fallback_.fit(train_df)
@@ -704,7 +742,9 @@ class QuantileBlend(_FittableMixin):
             self.models_[level] = model
 
     def predict(self, df: pl.DataFrame) -> pl.DataFrame:
-        if self.fallback_ is not None or not self.models_:
+        if self.fallback_ is None and not self.models_:
+            raise RuntimeError("QuantileBlend.predict called before fit")
+        if self.fallback_ is not None:
             fallback = self.fallback_.predict(df)
             return fallback.with_columns(
                 pl.col(PREDICTION_COLUMN).alias("prediction_p25"),
@@ -753,6 +793,7 @@ LOSO_COLUMNS = [
     "calibrator",
     "n_folds",
     "n_rows",
+    "coverage",
     "mae",
     "rank_corr",
     "is_winner",
@@ -780,15 +821,31 @@ def run_loso_evaluation(
     calibrator is fitted fresh (a `deepcopy`, so the caller's instances are
     never mutated) on the remaining seasons and predicts the held-out one.
 
+    Every calibrator in a fold is scored on the fold's **common support**:
+    the held-out rows on which *every* calibrator produced a non-null
+    prediction. Without this, a calibrator that declines to predict for some
+    players (`FantasyProsOnly` when that source is missing, any weight-based
+    calibrator for a player with no sources at all) would be scored on a
+    smaller and systematically easier subset than one that predicts
+    everywhere, and the resulting MAEs would not be comparable. `coverage`
+    reports what was given up: the mean fraction of held-out rows each
+    calibrator could predict on its own, before intersection.
+
     Metrics, per `(position, calibrator)`:
 
-    * `mae`   -- pooled mean absolute error over every held-out row across
-                 all folds. Pooled rather than averaged-over-folds so seasons
-                 with more players count proportionally.
+    * `mae`   -- pooled mean absolute error over every common-support row
+                 across all folds. Pooled rather than averaged-over-folds so
+                 seasons with more players count proportionally.
     * `rank_corr` -- Spearman rho computed *within* each held-out season and
                  then averaged over folds. Ranking players is a within-season
                  question; pooling seasons would let cross-season scoring
                  drift inflate the correlation.
+    * `coverage` -- mean over folds of (rows this calibrator could predict) /
+                 (held-out rows). 1.0 means it never abstained. Because
+                 `mae` is computed on common support, a low-coverage
+                 calibrator no longer gets an unearned advantage -- but a
+                 winner with `coverage < 1.0` still needs a fallback in
+                 `blend.py` for the players it cannot score.
 
     `is_winner` marks the best calibrator per position: lowest `mae`, with
     `rank_corr` (higher better) as the tiebreak. Positions with fewer than
@@ -811,49 +868,73 @@ def run_loso_evaluation(
             )
             continue
 
-        for name, template in calibrators.items():
-            errors: list[np.ndarray] = []
-            correlations: list[float] = []
-            folds = 0
+        errors: dict[str, list[np.ndarray]] = {n: [] for n in calibrators}
+        correlations: dict[str, list[float]] = {n: [] for n in calibrators}
+        coverages: dict[str, list[float]] = {n: [] for n in calibrators}
+        folds: dict[str, int] = dict.fromkeys(calibrators, 0)
 
-            for holdout in seasons:
-                train_fold = position_df.filter(pl.col("season") != holdout)
-                test_fold = position_df.filter(pl.col("season") == holdout)
-                if train_fold.height == 0 or test_fold.height == 0:
-                    continue
+        for holdout in seasons:
+            train_fold = position_df.filter(pl.col("season") != holdout)
+            test_fold = position_df.filter(pl.col("season") == holdout)
+            if train_fold.height == 0 or test_fold.height == 0:
+                continue
 
+            # Fit and predict everything first, then intersect: MAE is only
+            # meaningful between calibrators scored on the same rows.
+            predictions: dict[str, np.ndarray] = {}
+            for name, template in calibrators.items():
                 model = copy.deepcopy(template)
                 model.lambda_ = lambda_
                 model.reference_season = reference_season
                 model.fit(train_fold)
-                predicted = model.predict(test_fold)
-
-                evaluated = (
-                    test_fold.select(pl.col(TARGET_COLUMN))
-                    .with_columns(predicted[PREDICTION_COLUMN])
-                    .drop_nulls()
+                values = model.predict(test_fold)[PREDICTION_COLUMN].to_numpy(
+                    allow_copy=True
                 )
-                if evaluated.height == 0:
-                    continue
+                predictions[name] = values.astype(float)
+                coverages[name].append(
+                    float(np.mean(~np.isnan(predictions[name])))
+                    if test_fold.height
+                    else 0.0
+                )
 
-                actual_values = evaluated[TARGET_COLUMN].to_numpy()
-                predicted_values = evaluated[PREDICTION_COLUMN].to_numpy()
-                errors.append(np.abs(actual_values - predicted_values))
+            actual = test_fold[TARGET_COLUMN].to_numpy()
+            common = ~np.isnan(actual)
+            for values in predictions.values():
+                common &= ~np.isnan(values)
+            if not common.any():
+                logger.warning(
+                    "LOSO: position %s season %d has no rows every calibrator "
+                    "can predict -- fold skipped",
+                    position,
+                    holdout,
+                )
+                continue
+
+            actual_values = actual[common]
+            for name, values in predictions.items():
+                predicted_values = values[common]
+                errors[name].append(np.abs(actual_values - predicted_values))
                 rho = _rank_correlation(actual_values, predicted_values)
                 if rho is not None:
-                    correlations.append(rho)
-                folds += 1
+                    correlations[name].append(rho)
+                folds[name] += 1
 
-            pooled = np.concatenate(errors) if errors else np.empty(0)
+        for name in calibrators:
+            pooled = np.concatenate(errors[name]) if errors[name] else np.empty(0)
             records.append(
                 {
                     "position": position,
                     "calibrator": name,
-                    "n_folds": folds,
+                    "n_folds": folds[name],
                     "n_rows": int(pooled.size),
+                    "coverage": (
+                        float(np.mean(coverages[name])) if coverages[name] else None
+                    ),
                     "mae": float(pooled.mean()) if pooled.size else None,
                     "rank_corr": (
-                        float(np.mean(correlations)) if correlations else None
+                        float(np.mean(correlations[name]))
+                        if correlations[name]
+                        else None
                     ),
                 }
             )
@@ -865,6 +946,7 @@ def run_loso_evaluation(
                 "calibrator": pl.String,
                 "n_folds": pl.Int64,
                 "n_rows": pl.Int64,
+                "coverage": pl.Float64,
                 "mae": pl.Float64,
                 "rank_corr": pl.Float64,
                 "is_winner": pl.Boolean,
@@ -890,8 +972,12 @@ def run_loso_evaluation(
     )
 
 
-def print_loso_table(loso_df: pl.DataFrame) -> None:
-    """Render the LOSO comparison table via `rich`, winners highlighted."""
+def print_loso_table(loso_df: pl.DataFrame, console: object | None = None) -> None:
+    """Render the LOSO comparison table via `rich`, winners highlighted.
+
+    `console` is injectable so callers (and tests) can control width; rich
+    otherwise sizes to the terminal and abbreviates calibrator names.
+    """
     from rich.console import Console
     from rich.table import Table
 
@@ -900,6 +986,7 @@ def print_loso_table(loso_df: pl.DataFrame) -> None:
     table.add_column("Calibrator")
     table.add_column("Folds", justify="right")
     table.add_column("Rows", justify="right")
+    table.add_column("Coverage", justify="right")
     table.add_column("MAE", justify="right")
     table.add_column("Rank corr", justify="right")
     table.add_column("Winner", justify="center")
@@ -911,13 +998,14 @@ def print_loso_table(loso_df: pl.DataFrame) -> None:
             row["calibrator"],
             str(row["n_folds"]),
             str(row["n_rows"]),
+            "n/a" if row["coverage"] is None else f"{row['coverage']:.1%}",
             "n/a" if row["mae"] is None else f"{row['mae']:.3f}",
             "n/a" if row["rank_corr"] is None else f"{row['rank_corr']:.3f}",
             "*" if row["is_winner"] else "",
             style=style,
         )
 
-    Console().print(table)
+    (console or Console()).print(table)
 
 
 # --------------------------------------------------------------------------

@@ -233,6 +233,45 @@ def test_sparse_training_data_falls_back_to_equal_weight_mean(factory):
     )
 
 
+def test_games_played_is_not_a_model_feature():
+    """`games_played` counts games in the season being predicted, so it is
+    near-deterministic of that season's points and is null for an upcoming
+    season. It stays a diagnostic column, never a model input."""
+    assert "games_played" not in calibrate.EXTRA_FEATURE_COLUMNS
+
+    frame = _synthetic_training_frame(n=200).with_columns(
+        pl.lit(17.0).alias("games_played"),
+        pl.lit(150.0).alias("prior_actual_points"),
+    )
+    model = calibrate.LightGBMBlend(n_estimators=10)
+    model.fit(frame)
+    assert "games_played" not in model.features_
+    assert "prior_actual_points" in model.features_
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [calibrate.LightGBMBlend, calibrate.SmallMLP, calibrate.QuantileBlend],
+)
+def test_predict_before_fit_raises_a_named_error(factory):
+    model = factory()
+    with pytest.raises(RuntimeError, match=r"\.predict called before fit"):
+        model.predict(_tiny_frame())
+
+
+def test_fallback_without_any_source_columns_names_the_real_calibrator():
+    frame = pl.DataFrame(
+        {
+            "season": [2024, 2024],
+            "player_id": ["a", "b"],
+            "position": ["WR", "WR"],
+            calibrate.TARGET_COLUMN: [100.0, 120.0],
+        }
+    )
+    with pytest.raises(ValueError, match="RidgeBlend.fit: no proj_. columns"):
+        calibrate.RidgeBlend().fit(frame)
+
+
 def test_quantile_blend_returns_three_ordered_columns():
     frame = _synthetic_training_frame(n=200)
     model = calibrate.QuantileBlend(n_estimators=30)
@@ -322,18 +361,33 @@ def test_default_calibrators_are_the_six_spec_calibrators():
 
 
 def _multi_season_frame(seasons=(2022, 2023, 2024), positions=("RB", "WR"), n=60):
+    """Multi-season fixture for the LOSO/artifact tests.
+
+    `prior_actual_points` is generated independently of the row's own target
+    -- a noisy echo of a *different* draw, standing in for the previous
+    season. Setting it to the current target (an easy mistake) would hand the
+    three learned calibrators a perfect-information feature that the
+    production path can never produce, and would silently rig every LOSO
+    comparison run through this fixture.
+    """
     frames = []
     for season_index, season in enumerate(seasons):
         for position_index, position in enumerate(positions):
+            seed = 100 + 10 * season_index + position_index
+            rng = np.random.default_rng(seed + 5000)
             frame = _synthetic_training_frame(
                 n=n,
-                seed=100 + 10 * season_index + position_index,
+                seed=seed,
                 season=season,
                 position=position,
             ).with_columns(
                 (pl.col("player_id") + f"-{season}-{position}").alias("player_id"),
-                pl.lit(16.0).alias("prior_games_played"),
-                pl.col(calibrate.TARGET_COLUMN).alias("prior_actual_points"),
+                pl.Series("prior_games_played", rng.integers(8, 18, size=n)).cast(
+                    pl.Float64
+                ),
+                pl.Series("prior_actual_points", rng.normal(160.0, 55.0, size=n)).cast(
+                    pl.Float64
+                ),
             )
             frames.append(frame)
     return pl.concat(frames, how="vertical")
@@ -363,6 +417,41 @@ def test_loso_produces_one_row_per_position_and_calibrator():
         assert row["mae"] == pytest.approx(best)
 
 
+def test_loso_scores_every_calibrator_on_the_same_rows():
+    """FantasyProsOnly abstains where its column is null. Every calibrator must
+    still be scored on the same (intersected) rows, or the abstainer gets an
+    easier subset and an unearned MAE advantage."""
+    train_df = _multi_season_frame().with_columns(
+        pl.when(pl.int_range(pl.len()).over("season", "position") < 10)
+        .then(None)
+        .otherwise(pl.col("proj_fantasypros"))
+        .alias("proj_fantasypros")
+    )
+    calibrators = {
+        "EqualWeightMean": calibrate.EqualWeightMean(),
+        "FantasyProsOnly": calibrate.FantasyProsOnly(),
+        "RidgeBlend": calibrate.RidgeBlend(),
+    }
+
+    loso = calibrate.run_loso_evaluation(train_df, calibrators)
+
+    for position in ("RB", "WR"):
+        rows = loso.filter(pl.col("position") == position)
+        # Common support: identical evaluated row count for every calibrator.
+        assert rows["n_rows"].n_unique() == 1
+        # ...and it really is the intersection, not the full held-out set.
+        assert rows["n_rows"][0] == 3 * (60 - 10)
+
+    coverage = dict(
+        loso.filter(pl.col("position") == "RB")
+        .select("calibrator", "coverage")
+        .iter_rows()
+    )
+    assert coverage["FantasyProsOnly"] == pytest.approx(50 / 60)
+    assert coverage["EqualWeightMean"] == pytest.approx(1.0)
+    assert coverage["RidgeBlend"] == pytest.approx(1.0)
+
+
 def test_loso_skips_positions_with_a_single_season():
     train_df = _synthetic_training_frame(n=200, position="K")
     loso = calibrate.run_loso_evaluation(
@@ -386,10 +475,13 @@ def test_print_loso_table_renders(capsys):
             "RidgeBlend": calibrate.RidgeBlend(),
         },
     )
-    calibrate.print_loso_table(loso)
+    from rich.console import Console
+
+    calibrate.print_loso_table(loso, console=Console(width=200))
     out = capsys.readouterr().out
     assert "EqualWeightMean" in out
     assert "RidgeBlend" in out
+    assert "Coverage" in out
 
 
 # ---------------------------------------------------------------------------
@@ -500,6 +592,38 @@ def test_build_training_frame_scores_both_sides_with_the_shared_function():
     assert row["proj_espn"] == pytest.approx(3800 * 0.04)
     assert row[calibrate.TARGET_COLUMN] == pytest.approx(300 * 0.04 + 2 * 6.0)
     assert row["games_played"] == pytest.approx(2.0)
+
+
+def test_build_training_frame_rejects_multi_source_actuals():
+    """Two sources for the same player-season would silently double the target
+    (weeks are summed), so it must fail loudly instead."""
+    projections = _long_rows(
+        [(2024, 0, "sleeper", "p1", "WR", "reception", 80)],
+    )
+    actuals = _long_rows(
+        [
+            (2024, 1, "nflverse", "p1", "WR", "reception", 70),
+            (2024, 1, "some_other_feed", "p1", "WR", "reception", 70),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="must carry exactly one source"):
+        calibrate.build_training_frame(projections, actuals, RULES)
+
+    frame = calibrate.build_training_frame(
+        projections, actuals, RULES, actual_source="nflverse"
+    )
+    assert frame[calibrate.TARGET_COLUMN].to_list() == [pytest.approx(35.0)]
+
+
+def test_build_training_frame_rejects_an_unknown_actual_source():
+    projections = _long_rows([(2024, 0, "sleeper", "p1", "WR", "reception", 80)])
+    actuals = _long_rows([(2024, 1, "nflverse", "p1", "WR", "reception", 70)])
+
+    with pytest.raises(ValueError, match="no actuals rows for source"):
+        calibrate.build_training_frame(
+            projections, actuals, RULES, actual_source="nope"
+        )
 
 
 def test_build_training_frame_derives_prior_season_features():
