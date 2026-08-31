@@ -214,10 +214,12 @@ def _projection_rows(rows: list[tuple]) -> pl.DataFrame:
     )
 
 
-def test_build_board_feeds_derived_first_downs_into_apply_blend(
+def test_build_board_passes_projections_to_apply_blend_unaugmented(
     monkeypatch, blended_df, adp_df, tmp_path
 ):
-    """`derive_first_downs` output must actually reach `apply_blend`'s input."""
+    """1st-down derivation is deliberately unwired (it double-counted against
+    the calibrators' implicit uplift), so projections must reach `apply_blend`
+    exactly as handed in."""
     captured: dict[str, pl.DataFrame] = {}
 
     def _capture(projections, *a, **k):
@@ -227,7 +229,6 @@ def test_build_board_feeds_derived_first_downs_into_apply_blend(
     monkeypatch.setattr(board, "apply_blend", _capture)
 
     projections = _projection_rows([("sleeper", "rb1", "RB", "rushing yard", 1000.0)])
-    # Historical rate: 100 first downs on 1000 rushing yards.
     history = _projection_rows(
         [
             ("nflverse", "rb1", "RB", "rushing yard", 1000.0),
@@ -245,13 +246,7 @@ def test_build_board_feeds_derived_first_downs_into_apply_blend(
         teams=1,
     )
 
-    augmented = captured["projections"]
-    derived = augmented.filter(pl.col("stat_name") == "rushing 1st down")
-    assert derived.height == 1, "derive_first_downs output never reached apply_blend"
-    # Shrunk toward the positional mean, which here IS the player's own rate.
-    assert derived["stat_value"][0] == pytest.approx(100.0)
-    # The original rows are still there.
-    assert augmented.filter(pl.col("stat_name") == "rushing yard").height == 1
+    assert captured["projections"].equals(projections)
 
 
 def test_build_board_adds_dst_rows_derived_from_historical_team_stats(

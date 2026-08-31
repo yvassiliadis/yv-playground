@@ -12,6 +12,15 @@ provides (its `gsis_id`-based `player_id` for players, and a synthetic
 `DST_<team>` id for defenses).
 
 Known gaps, deliberately NOT filled in here (left for Task 6 / derive.py):
+  - rushing/receiving 1st downs: nflreadpy does expose
+    `rushing_first_downs`/`receiving_first_downs`, but they are deliberately
+    NOT mapped. Nothing projects 1st downs, so scoring them in the actuals
+    (which are the calibration target) while the historical projections the
+    calibrators train on carry no 1st-down rows makes the calibrators absorb
+    an implicit 1st-down uplift; adding an explicit derived 1st-down term at
+    board time on top of that double-counts. Until that asymmetry is solved,
+    1st-down points are simply not scored anywhere in the pipeline. See
+    `derive.py`'s `derive_first_downs`, which stays available but unwired.
   - DST granular stats: 3-and-outs, 4th-down stops, tackles for loss, and
     pass defended are not available from nflreadpy's team-level weekly
     stats
@@ -64,13 +73,6 @@ _PLAYER_STAT_MAP = {
     "receiving_yards": "receiving yard",
     "receiving_tds": "receiving td",
     "receiving_2pt_conversions": "receiving 2-pt conversion",
-    # nflreadpy does expose these two directly, and the scoring CSV rewards
-    # them at 0.5 each. `derive.derive_first_downs` needs them here as the
-    # historical base rate it shrinks and projects forward -- no projection
-    # source reports 1st downs, so without these rows every derived
-    # 1st-down projection would come out as a silent 0.0.
-    "rushing_first_downs": "rushing 1st down",
-    "receiving_first_downs": "receiving 1st down",
 }
 
 # Fumbles lost can occur on a sack, a rush, or a reception; the scoring CSV

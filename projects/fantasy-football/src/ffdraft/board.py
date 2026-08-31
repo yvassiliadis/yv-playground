@@ -25,17 +25,8 @@ real ADP ingestion task exists.
 
 Derived stats (`ffdraft.derive`)
 -------------------------------
-Two of `derive.py`'s three families are wired in here, at two different
-points, because they are two different kinds of object:
+One of `derive.py`'s three families is wired in here:
 
-* **1st downs** (`derive.augment_projections`) are canonical long-schema
-  *stat rows*, so they are appended to `projections` **before**
-  `apply_blend`. They then flow through `scoring.score()` with every other
-  stat, per-source, and the existing blend weights apply to them unchanged.
-  Doing this after the blend would mean re-implementing scoring on an
-  EP-level frame. The historical rate base is `weekly_actuals` restricted to
-  `consistency_seasons` -- the same prior-season window the board already
-  trusts for variance, and strictly earlier than the season being drafted.
 * **DST expected points** (`derive.derive_dst_seasonal_ep`) are already
   fantasy points, not stat rows, so they are merged in **after**
   `apply_blend`: they fill a null `EP` for a defense the blend could not
@@ -47,6 +38,14 @@ points, because they are two different kinds of object:
 `derive.derive_kicker_fg_buckets` is deliberately NOT wired in: no source
 module fetches kicker projections, so there is no total-FG stat to split. See
 the README's known-gaps section and `metrics/vor.py`'s `K_DST_REPLACEMENT_N`.
+
+`derive.augment_projections`/`derive.derive_first_downs` are deliberately NOT
+wired in either: `model/calibrate.py` trains on historical projection
+snapshots that carry no 1st-down rows, so the calibrators already absorb an
+implicit 1st-down uplift from correlated features -- adding an explicit
+derived 1st-down term here would double-count it. `ingest/actuals.py`
+therefore does not score 1st downs at all (see its module docstring), and
+this stays unwired until a season-aware training-side derivation exists.
 
 Column semantics
 -----------------
@@ -182,9 +181,7 @@ def build_board(
         else weekly_actuals
     )
 
-    blended = apply_blend(
-        derive.augment_projections(projections, history), weights_path, rules
-    )
+    blended = apply_blend(projections, weights_path, rules)
 
     if historical_team_stats is None:
         historical_team_stats = (

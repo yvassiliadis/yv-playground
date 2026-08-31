@@ -26,9 +26,13 @@ command that reads them takes a **glob pattern**, not a single file — e.g.
 through to Polars rather than expanding it itself.
 
 Repeated ingest runs append rather than overwrite. That is safe: `scoring.score()`
-runs `scoring.latest_snapshot_rows()` over everything it scores, keeping only the
-newest `snapshot_date` per `(season, week, source, player_id, stat_name)`, so a
-second snapshot of the same season never double-counts.
+runs `scoring.latest_snapshot_rows()` over everything it scores, keeping exactly
+one row per `(season, week, source, player_id, stat_name)` — the newest
+`snapshot_date`, and just one row even when several rows tie at that date (two
+ingest runs on the same day). So a repeated snapshot of the same season never
+double-counts, whether or not the re-run lands on a new date. Rows with no
+`snapshot_date` column at all (e.g. `derive.py`'s synthesised DST frame) are
+passed through untouched.
 
 ## CLI commands
 
@@ -108,11 +112,16 @@ These are real, deliberate limitations, not bugs to be surprised by:
   points from historical team stats via `derive.derive_dst_seasonal_ep`, so the
   board still has defenses on it; those rows are a decay-weighted historical
   extrapolation, not a projection.
-- **1st downs are derived, not projected.** No source reports rushing/receiving
-  1st downs (0.5 pts each). `board.build_board` derives them before blending, from
-  a shrunk historical per-volume rate; `model calibrate` deliberately does not, to
-  avoid leaking the target season into its own features. See `derive.py`'s module
-  docstring.
+- **1st downs are not scored at all.** No source reports rushing/receiving 1st
+  downs (0.5 pts each), and `ingest/actuals.py` deliberately does not map
+  nflreadpy's `rushing_first_downs`/`receiving_first_downs` either, so no 1st-down
+  points enter projections *or* actuals. `derive.derive_first_downs` can estimate
+  them from a shrunk historical per-volume rate and stays tested, but it is
+  unwired: `model calibrate` trains on historical projection snapshots that carry
+  no 1st-down rows, so scoring 1st downs only in the target makes the calibrators
+  absorb an implicit uplift that an explicit board-time term would double-count.
+  Wiring it back in needs a season-aware training-side rate table first. See
+  `derive.py`'s module docstring.
 
 ## Development
 
