@@ -23,6 +23,21 @@ module therefore takes `adp` as a plain `pl.DataFrame` argument (`player_id`,
 is responsible for sourcing it, e.g. from a manually-maintained CSV, until a
 real ADP ingestion task exists.
 
+Without a real ADP source, any "ADP" a caller supplies is necessarily a
+proxy (e.g. ranking players by their own blended `EP`), which makes the
+ADP-derived `vor` column circular: it uses a stand-in market signal built
+from the exact number it is meant to adjust, and that stand-in has no
+notion of positional scarcity (a real draft market takes far fewer QBs
+early than their raw point totals alone would suggest, since a team only
+starts one) -- verified in practice: sorting by `vor` under an EP-ranked
+ADP proxy filled the top of the board almost entirely with QBs. `roster_math_vor`
+has no such dependency (it sizes replacement level from the roster
+config's starter counts, not a market signal), so it is this board's
+default sort key. `vor`, `risk_adjusted_vor`, and `dropoff_value` are
+still computed and included as columns -- they become meaningful again,
+and worth switching the sort back to, once `adp` is populated from a real
+source instead of a proxy.
+
 Derived stats (`ffdraft.derive`)
 -------------------------------
 One of `derive.py`'s three families is wired in here:
@@ -79,8 +94,10 @@ from ffdraft.metrics.vor import (
 from ffdraft.model.blend import apply_blend
 
 #: Final board columns, in display order. `rank` is assigned from the
-#: `vor` descending sort (the plan's stated primary sort key); every other
-#: column is a straight rename/select off the upstream frames.
+#: `roster_math_vor` descending sort -- the default while `adp` is a proxy
+#: rather than a real market signal; see the module docstring's "ADP
+#: plumbing" section. Every other column is a straight rename/select off
+#: the upstream frames.
 BOARD_COLUMNS = [
     "rank",
     "player",
@@ -172,8 +189,10 @@ def build_board(
     rows of `weekly_actuals` over `consistency_seasons`, which is what
     `ingest actuals` already writes.
 
-    Returns one row per player, sorted by `vor` descending, with `rank`
-    assigned from that order (1 = best `VOR`).
+    Returns one row per player, sorted by `roster_math_vor` descending
+    (see the module docstring's "ADP plumbing" section for why this is the
+    default sort rather than the ADP-derived `vor`), with `rank` assigned
+    from that order.
     """
     history = (
         weekly_actuals.filter(pl.col("season").is_in(consistency_seasons))
@@ -228,8 +247,16 @@ def build_board(
         pl.col("ceiling"),
         pl.col("pct_weeks_above_baseline"),
         pl.col("adp"),
-    ).sort("vor", descending=True, nulls_last=True)
+    ).sort("roster_math_vor", descending=True, nulls_last=True)
 
     board = board.with_columns(pl.int_range(1, board.height + 1).alias("rank"))
+
+    # Round every float column to 2 decimals -- several of these carry
+    # long floating-point tails from upstream arithmetic (e.g. a Ridge
+    # blend's fitted coefficients), which is unreadable in a spreadsheet
+    # and false precision either way for a draft board a human reads.
+    board = board.with_columns(
+        pl.col(c).round(2) for c, dtype in board.schema.items() if dtype.is_float()
+    )
 
     return board.select(BOARD_COLUMNS)

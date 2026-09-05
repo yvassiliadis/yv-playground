@@ -6,6 +6,7 @@ import polars as pl
 import pytest
 
 from ffdraft import board, derive
+from ffdraft.config import RosterConfig
 
 RULES = {"reception": 1.0}
 
@@ -110,7 +111,61 @@ def test_build_board_columns(
     assert result.height == blended_df.height
 
 
-def test_build_board_sorted_by_vor_desc_with_rank_assigned(
+def test_build_board_rounds_float_columns_to_2_decimals(monkeypatch):
+    """Long floating-point tails from upstream arithmetic (e.g. a Ridge
+    blend's fitted coefficients) are unreadable in a spreadsheet and false
+    precision for a human-read draft board either way."""
+    blended_df = _blended(
+        [
+            (2025, "wr1", "WR", 100.333333, "SF", "WR One"),
+            (2025, "wr2", "WR", 90.126789, "SF", "WR Two"),
+        ]
+    )
+    adp_df = pl.DataFrame(
+        {
+            "player_id": ["wr1", "wr2"],
+            "position": ["WR", "WR"],
+            "adp": [1, 2],
+        }
+    )
+    empty_weekly_actuals = pl.DataFrame(
+        schema={
+            "season": pl.Int64,
+            "week": pl.Int64,
+            "source": pl.String,
+            "snapshot_date": pl.String,
+            "source_player_id": pl.String,
+            "player_id": pl.String,
+            "player_name_raw": pl.String,
+            "team": pl.String,
+            "position": pl.String,
+            "stat_name": pl.String,
+            "stat_value": pl.Float64,
+        }
+    )
+    monkeypatch.setattr(board, "apply_blend", lambda *a, **k: blended_df)
+
+    result = board.build_board(
+        projections=pl.DataFrame(),
+        weights_path="/unused.parquet",
+        adp=adp_df,
+        weekly_actuals=empty_weekly_actuals,
+        consistency_seasons=[2024],
+        rules=RULES,
+        teams=1,
+    )
+
+    wr_one = result.filter(pl.col("player") == "WR One").row(0, named=True)
+    assert wr_one["ep"] == pytest.approx(100.33)
+    for column, dtype in result.schema.items():
+        if not dtype.is_float():
+            continue
+        for value in result[column].drop_nulls().to_list():
+            rounded = round(value, 2)
+            assert value == pytest.approx(rounded), f"{column} not rounded: {value}"
+
+
+def test_build_board_sorted_by_roster_math_vor_desc_with_rank_assigned(
     monkeypatch, blended_df, adp_df, weekly_actuals_df, tmp_path
 ):
     monkeypatch.setattr(board, "apply_blend", lambda *a, **k: blended_df)
@@ -125,14 +180,84 @@ def test_build_board_sorted_by_vor_desc_with_rank_assigned(
         teams=1,
     )
 
-    vor_values = result["vor"].to_list()
-    assert vor_values == sorted(vor_values, reverse=True)
+    roster_math_vor_values = result["roster_math_vor"].to_list()
+    assert roster_math_vor_values == sorted(roster_math_vor_values, reverse=True)
     assert result["rank"].to_list() == list(range(1, result.height + 1))
-    # Rank 1 is the highest-VOR player.
+    # Rank 1 is the highest-roster_math_vor player.
     assert (
         result.row(0, named=True)["player"]
-        == result.sort("vor", descending=True).row(0, named=True)["player"]
+        == result.sort("roster_math_vor", descending=True).row(0, named=True)["player"]
     )
+
+
+def test_build_board_sorts_by_roster_math_vor_not_adp_derived_vor(monkeypatch):
+    """The board's default sort must be `roster_math_vor`, not the
+    ADP-derived `vor` -- see board.py's module docstring on why an ADP
+    proxy (no real ADP source exists) makes `vor` an unreliable sort key.
+
+    This fixture is constructed so the two metrics genuinely disagree on
+    who ranks first: with 3 WR starters recognised by the roster config
+    but only 1 RB starter, `roster_math_vor`'s replacement level for RB is
+    the RB1 player's own score (VOR 0), so a strong RB1 does not out-rank
+    a WR who clears the (lower, 3-deep) WR replacement level. Under the
+    ADP-derived `vor` (N_pos sized off the ADP pool, not the roster
+    config), RB1's replacement level is far lower, giving RB1 a much
+    higher `vor` (65.0) that would have put it in first place under the
+    old sort -- proving this test would fail if the sort key regressed.
+    """
+    blended_df = _blended(
+        [
+            (2025, "wr1", "WR", 100.0, "SF", "WR One"),
+            (2025, "wr2", "WR", 90.0, "SF", "WR Two"),
+            (2025, "wr3", "WR", 80.0, "SF", "WR Three"),
+            (2025, "rb1", "RB", 95.0, "KC", "RB One"),
+            (2025, "rb2", "RB", 30.0, "KC", "RB Two"),
+        ]
+    )
+    adp_df = pl.DataFrame(
+        {
+            "player_id": ["wr1", "wr2", "wr3", "rb1", "rb2"],
+            "position": ["WR", "WR", "WR", "RB", "RB"],
+            "adp": [1, 2, 3, 4, 5],
+        }
+    )
+    empty_weekly_actuals = pl.DataFrame(
+        schema={
+            "season": pl.Int64,
+            "week": pl.Int64,
+            "source": pl.String,
+            "snapshot_date": pl.String,
+            "source_player_id": pl.String,
+            "player_id": pl.String,
+            "player_name_raw": pl.String,
+            "team": pl.String,
+            "position": pl.String,
+            "stat_name": pl.String,
+            "stat_value": pl.Float64,
+        }
+    )
+    roster_config = RosterConfig(starters={"WR": 3, "RB": 1}, bench=0)
+
+    monkeypatch.setattr(board, "apply_blend", lambda *a, **k: blended_df)
+
+    result = board.build_board(
+        projections=pl.DataFrame(),
+        weights_path="/unused.parquet",
+        adp=adp_df,
+        weekly_actuals=empty_weekly_actuals,
+        consistency_seasons=[2024],
+        rules=RULES,
+        teams=1,
+        roster_config=roster_config,
+    )
+
+    by_player = {row["player"]: row for row in result.iter_rows(named=True)}
+    assert by_player["RB One"]["vor"] == pytest.approx(65.0)
+    assert by_player["RB One"]["roster_math_vor"] == pytest.approx(0.0)
+    # RB One has the highest ADP-derived vor -- it would rank first under
+    # the old (regressed) sort key, but not under roster_math_vor.
+    assert result.row(0, named=True)["player"] == "WR One"
+    assert result.row(0, named=True)["player"] != "RB One"
 
 
 def test_build_board_carries_consistency_columns_and_nulls_for_rookies(

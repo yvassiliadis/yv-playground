@@ -107,6 +107,35 @@ def test_load_weekly_actuals_calls_nflreadpy(monkeypatch, player_stats_fixture):
     assert result.height > 0
 
 
+def test_load_weekly_actuals_drops_postseason_weeks(monkeypatch, player_stats_fixture):
+    """Regression test for a real bug: nflreadpy's weekly player stats
+    include playoff weeks tagged season_type="POST" alongside the regular
+    season, and nothing filtered them out -- a season total silently
+    included playoff production on top of the real 17-game total (caught
+    live: a 2022 QB's "season" passing yards included 3 playoff games'
+    worth on top of the real regular-season number)."""
+    with_playoffs = player_stats_fixture.with_columns(
+        pl.lit("REG").alias("season_type")
+    )
+    playoff_row = with_playoffs.head(1).with_columns(
+        pl.lit(19).cast(pl.Int64).alias("week"),
+        pl.lit("POST").alias("season_type"),
+        pl.lit(9999).cast(pl.Int64).alias("passing_yards"),
+    )
+    fixture_with_post = pl.concat([with_playoffs, playoff_row])
+
+    monkeypatch.setattr(
+        actuals.nfl,
+        "load_player_stats",
+        lambda seasons, summary_level: fixture_with_post,
+    )
+
+    result = actuals.load_weekly_actuals([2023])
+
+    assert 9999 not in result["stat_value"].to_list()
+    assert result.filter(pl.col("week") == 19).height == 0
+
+
 @pytest.fixture
 def team_stats_fixture() -> pl.DataFrame:
     """One game, two teams (KC home, DEN away).
@@ -214,6 +243,32 @@ def test_load_dst_actuals_calls_nflreadpy(
     assert captured["schedules_seasons"] == [2023]
     assert result.columns == actuals.CANONICAL_COLUMNS
     assert result.height > 0
+
+
+def test_load_dst_actuals_drops_postseason_weeks(
+    monkeypatch, team_stats_fixture, schedules_fixture
+):
+    """Same postseason-inclusion bug as the player-stats side (see
+    test_load_weekly_actuals_drops_postseason_weeks), but for team stats."""
+    with_reg = team_stats_fixture.with_columns(pl.lit("REG").alias("season_type"))
+    playoff_row = with_reg.head(1).with_columns(
+        pl.lit(19).cast(pl.Int64).alias("week"),
+        pl.lit("POST").alias("season_type"),
+        pl.lit(999).cast(pl.Int64).alias("def_sacks"),
+    )
+    fixture_with_post = pl.concat([with_reg, playoff_row])
+
+    monkeypatch.setattr(
+        actuals.nfl, "load_team_stats", lambda seasons, summary_level: fixture_with_post
+    )
+    monkeypatch.setattr(
+        actuals.nfl, "load_schedules", lambda seasons: schedules_fixture
+    )
+
+    result = actuals.load_dst_actuals([2023])
+
+    assert 999 not in result["stat_value"].to_list()
+    assert result.filter(pl.col("week") == 19).height == 0
 
 
 def test_reshape_dst_stats_skips_unresolved_game(schedules_fixture):

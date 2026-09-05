@@ -61,6 +61,17 @@ BASE_URL = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons"
 _PROJECTED_STAT_SOURCE_ID = 1
 _SEASON_SCORING_PERIOD_ID = 0
 
+# statSplitTypeId ESPN uses for the full-season total (as opposed to `2`,
+# a continuously-updated "rest of season" projection that shrinks toward
+# zero as the season progresses and each player's `id` field is prefixed
+# accordingly -- e.g. "102022" for split 0 vs "122022" for split 2 on the
+# same player/season). Confirmed live: for a player with both blocks under
+# the same scoringPeriodId=0/statSourceId=1/seasonId, only splitTypeId=0
+# carries a plausible full-season total; splitTypeId=2 is a small number of
+# projected-remaining-games' stats. Without this check, `next()` below
+# would non-deterministically pick whichever block appears first.
+_FULL_SEASON_SPLIT_TYPE_ID = 0
+
 # ESPN internal numeric stat ID -> canonical stat_name, mapped only for IDs
 # with a home in the scoring vocabulary. See module docstring: each ID was
 # checked against real players' projected stat magnitudes, not just copied
@@ -183,6 +194,7 @@ class ESPNSource:
                     if entry.get("scoringPeriodId") == _SEASON_SCORING_PERIOD_ID
                     and entry.get("statSourceId") == _PROJECTED_STAT_SOURCE_ID
                     and entry.get("seasonId") == season
+                    and entry.get("statSplitTypeId") == _FULL_SEASON_SPLIT_TYPE_ID
                 ),
                 None,
             )

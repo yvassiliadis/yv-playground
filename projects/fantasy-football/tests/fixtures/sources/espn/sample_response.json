@@ -61,6 +61,16 @@
       },
       {
         "scoringPeriodId": 0,
+        "seasonId": 2026,
+        "statSourceId": 1,
+        "statSplitTypeId": 2,
+        "stats": {
+          "3": 60.0,
+          "4": 0.3
+        }
+      },
+      {
+        "scoringPeriodId": 0,
         "seasonId": 2025,
         "statSourceId": 1,
         "statSplitTypeId": 0,

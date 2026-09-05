@@ -297,17 +297,30 @@ def _renormalised_blend(df: pl.DataFrame, weights: dict[str, float]) -> pl.Serie
     surviving weights always sum to 1 for that row. Rows with no usable
     source get a null prediction.
     """
+    if df.height == 0:
+        return pl.Series(PREDICTION_COLUMN, [], dtype=pl.Float64)
+
     numerator = pl.lit(0.0)
     denominator = pl.lit(0.0)
+    any_column_present = False
     for source, weight in weights.items():
         column = projection_column(source)
         if column not in df.columns or weight == 0.0:
             continue
+        any_column_present = True
         present = pl.col(column).is_not_null()
         numerator = numerator + pl.when(present).then(
             pl.col(column) * weight
         ).otherwise(0.0)
         denominator = denominator + pl.when(present).then(weight).otherwise(0.0)
+
+    if not any_column_present:
+        # None of `weights`' sources exist in `df` at all (e.g. a calibrator
+        # weighted toward a source this dataset never has). With no `pl.col`
+        # reference anywhere, the expression below would be a pure scalar --
+        # `df.select(...)` would return one row, not `df.height` -- so this
+        # case is handled directly rather than falling through to that trap.
+        return pl.Series(PREDICTION_COLUMN, [None] * df.height, dtype=pl.Float64)
 
     blended = (
         pl.when(denominator > 0)
@@ -315,8 +328,6 @@ def _renormalised_blend(df: pl.DataFrame, weights: dict[str, float]) -> pl.Serie
         .otherwise(None)
         .alias(PREDICTION_COLUMN)
     )
-    if df.height == 0:
-        return pl.Series(PREDICTION_COLUMN, [], dtype=pl.Float64)
     return df.select(blended).to_series()
 
 

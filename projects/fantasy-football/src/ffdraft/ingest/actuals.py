@@ -127,8 +127,17 @@ def _bucket_expr(
 
 
 def load_weekly_actuals(seasons: list[int]) -> pl.DataFrame:
-    """Pull weekly player stats for `seasons` and reshape to canonical long form."""
+    """Pull weekly player stats for `seasons` and reshape to canonical long form.
+
+    `summary_level="week"` returns every week nflreadpy has, including
+    playoff weeks tagged `season_type="POST"` -- the league this pipeline
+    scores for plays a regular season only, so postseason rows are dropped
+    here rather than silently inflating season totals (confirmed: an
+    unfiltered season total included 3 playoff games worth of extra yards).
+    """
     raw = nfl.load_player_stats(seasons=seasons, summary_level="week")
+    if "season_type" in raw.columns:
+        raw = raw.filter(pl.col("season_type") == "REG")
     return _reshape_player_stats(raw)
 
 
@@ -167,8 +176,14 @@ def _reshape_player_stats(raw: pl.DataFrame) -> pl.DataFrame:
 
 
 def load_dst_actuals(seasons: list[int]) -> pl.DataFrame:
-    """Pull weekly team defensive stats for `seasons` and reshape to canonical long form."""
+    """Pull weekly team defensive stats for `seasons` and reshape to canonical long form.
+
+    Playoff weeks are dropped for the same reason `load_weekly_actuals`
+    drops them -- see that function's docstring.
+    """
     team_stats = nfl.load_team_stats(seasons=seasons, summary_level="week")
+    if "season_type" in team_stats.columns:
+        team_stats = team_stats.filter(pl.col("season_type") == "REG")
     schedules = nfl.load_schedules(seasons=seasons)
     return _reshape_dst_stats(team_stats, schedules)
 

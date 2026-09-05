@@ -17,6 +17,17 @@ Luther Burden III, Geno Smith, Omarion Hampton -- with additions on top:
   before being discarded) but deliberately distinct from the 2026 block's
   real values, so a test asserting on the 2026 numbers would fail if the
   season filter picked the wrong block.
+- Geno Smith's third `stats` entry, a `statSplitTypeId=2` ("rest of
+  season") block alongside his real `statSplitTypeId=0` (full season)
+  2026 one, both otherwise identical (`scoringPeriodId=0`/`statSourceId=1`/
+  `seasonId=2026`). This collision is also real and live-confirmed:
+  ESPN's live API carries both split types once a season is underway, and
+  without the `statSplitTypeId == 0` check a plain `next()` match could
+  non-deterministically pick the near-zero "rest of season" block instead
+  of the genuine full-season projection. The tiny stat values in the
+  fabricated splitTypeId=2 block (e.g. 60.0 passing yards) are deliberately
+  implausible as a *full-season* total, mirroring the real live case where
+  a late-season "rest of season" projection shrinks toward zero.
 - The entire "Unrostered Rookie" player (fabricated, to exercise the
   unmatched-native-ID path).
 """
@@ -163,8 +174,25 @@ class TestFetch:
         stats_2025 = dict(zip(smith_2025["stat_name"], smith_2025["stat_value"]))
         assert stats_2025["passing yard"] == pytest.approx(4224.622681)
 
-        # the two seasons' blocks must not bleed into each other
-        assert stats_2026["passing yard"] != stats_2025["passing yard"]
+    def test_split_type_collision_uses_the_full_season_block(
+        self, monkeypatch, sample_payload, crosswalk_reference
+    ):
+        # Regression test for a real bug: ESPN's live API carries both a
+        # full-season projection (statSplitTypeId=0) and a continuously
+        # updated "rest of season" projection (statSplitTypeId=2) under the
+        # identical scoringPeriodId=0/statSourceId=1/seasonId shape. Geno
+        # Smith's fixture adds a fabricated splitTypeId=2 block with a tiny,
+        # implausible-as-a-season-total value (60.0 passing yards).
+        # Removing the `statSplitTypeId == 0` guard would let this test
+        # fail by picking that block instead of the real 3815.216003 one.
+        _mock_client(monkeypatch, sample_payload)
+        monkeypatch.setattr(espn, "build_crosswalk", lambda: crosswalk_reference)
+
+        result = ESPNSource().fetch(season=2026)
+
+        smith = result.filter(pl.col("source_player_id") == "15864")
+        stats = dict(zip(smith["stat_name"], smith["stat_value"]))
+        assert stats["passing yard"] == pytest.approx(3815.216003)
 
     def test_resolves_team_via_pro_team_map(
         self, monkeypatch, sample_payload, crosswalk_reference

@@ -208,6 +208,37 @@ def test_ridge_blend_renormalises_over_present_sources():
     assert 180.0 <= predicted <= 200.0
 
 
+def test_equal_weight_mean_predicts_null_for_every_row_when_no_weighted_source_present():
+    """A calibrator weighted toward a source entirely absent from `df` (e.g.
+    FantasyProsOnly against a dataset with no FantasyPros archive) must
+    still return one null prediction per row -- not silently collapse the
+    whole frame to a single broadcast row (the trap `_renormalised_blend`
+    used to fall into when no `pl.col` reference ever got built)."""
+    model = calibrate.EqualWeightMean()
+    train_df = pl.DataFrame(
+        {
+            "season": [2023, 2023, 2023],
+            "player_id": ["a", "b", "c"],
+            "position": ["RB", "RB", "RB"],
+            "proj_fantasypros": [100.0, 90.0, 80.0],
+        }
+    )
+    model.fit(train_df)
+
+    df_without_that_source = pl.DataFrame(
+        {
+            "season": [2024] * 5,
+            "player_id": ["p1", "p2", "p3", "p4", "p5"],
+            "position": ["RB"] * 5,
+            "proj_sleeper": [10.0, 20.0, 30.0, 40.0, 50.0],
+        }
+    )
+    predicted = model.predict(df_without_that_source)
+
+    assert predicted.height == df_without_that_source.height
+    assert predicted[calibrate.PREDICTION_COLUMN].is_null().all()
+
+
 # ---------------------------------------------------------------------------
 # Sparse-data fallback.
 # ---------------------------------------------------------------------------
