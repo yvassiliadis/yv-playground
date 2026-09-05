@@ -1,0 +1,4 @@
+player,team,position,pass_att,pass_cmp,pass_yds,pass_td,pass_int,rush_att,rush_yds,rush_td,rec,rec_yds,rec_td,fum_lost
+Patrick Mahomes,KC,QB,600,400,4500,38,10,60,300,2,,,,1
+Justin Jefferson,MIN,WR,,,,,,5,20,0,120,1500,10,1
+Totally Fictional Player,DAL,RB,,,,,,200,900,8,50,400,3,2

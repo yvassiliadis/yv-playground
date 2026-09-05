@@ -1,0 +1,4 @@
+Player,Team,Position,PassAtt,PassCmp,PassYds,PassTD,Int,RushAtt,RushYds,RushTD,Rec,RecYds,RecTD,FumblesLost
+Patrick Mahomes,KC,QB,600,400,4500,38,10,60,300,2,0,0,0,1
+Justin Jefferson,MIN,WR,0,0,0,0,0,5,20,0,120,1500,10,1
+Nobody Special,FA,WR,0,0,0,0,0,0,0,0,10,80,0,0

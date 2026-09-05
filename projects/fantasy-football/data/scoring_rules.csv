@@ -1,0 +1,48 @@
+﻿Stat,Points
+passing yard,0.04
+passing td,6
+passing 2-pt conversion,2
+pass intercepted,-1
+rushing yard,0.1
+rushing td,6
+rushing 1st down,0.5
+rushing 2-pt conversion,2
+reception,0.5
+receiving yard,0.1
+receiving td,6
+receiving 1st down,0.5
+receiving 2-pt conversion,2
+0-39 FG made,3
+40-49 FG made,4
+5+ FG made,5
+PAT made,1
+FG missed,-1
+defense td,6
+0-13 pts allowed,0
+14-20 pts allowed,-1
+21-27 pts allowed,-2
+28-34 pts allowed,-3
+35+ pts allowed,-4
+pts per pt allowed,-0.1
+0-349 yds allowed,0
+350-399 yds allowed,-1
+400-449 yds allowed,-2
+450-499 yds allowed,-3
+500-549 yds allowed,-4
+550+ yds allowed,-5
+defense 3 and out,0.25
+defense 4th down stop,0.5
+sacks,1
+defense interception,2
+fumble recovery,1
+tackle for loss,0.5
+safety,4
+forced fumble,1
+defense blocked kick,3
+pass defended,0.25
+2-pt conversion return,4
+special teams td,6
+special teams forced fumble,1
+special teams fumble recovery,1
+fumble lost,-2
+fumble recovery td,6
