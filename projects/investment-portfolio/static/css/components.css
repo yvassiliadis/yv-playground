@@ -281,7 +281,9 @@
 }
 .settings-btn.primary { color: var(--bg); background: var(--amber); border-color: var(--amber); }
 .settings-btn.danger  { color: var(--red); background: var(--red-dim); border-color: var(--red-glow); }
+.settings-btn.accent  { color: var(--amber); background: var(--amber-dim); border-color: var(--amber-glow); }
 .settings-btn.primary:hover { opacity: 0.9; }
+.settings-btn.accent:hover  { background: rgba(212,160,39,0.2); }
 .settings-btn.danger:hover  { background: rgba(239,68,68,0.2); }
 
 .settings-tag {

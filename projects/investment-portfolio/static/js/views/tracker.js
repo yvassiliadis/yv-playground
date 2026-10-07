@@ -106,7 +106,7 @@ function portfolioCard(p, sort) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
         <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;color:var(--text);">${esc(p.name)}</div>
         <div style="display:flex;gap:8px;">
-          <button class="settings-btn" data-import="${esc(p.name)}" style="font-size:0.65rem;padding:4px 10px;">Import CSV</button>
+          <button class="settings-btn accent" data-import="${esc(p.name)}" style="font-size:0.65rem;padding:4px 10px;">Import CSV</button>
           <button class="settings-btn" data-remove="${esc(p.name)}" style="font-size:0.65rem;padding:4px 10px;color:var(--red);border-color:var(--red);">Remove</button>
         </div>
       </div>
