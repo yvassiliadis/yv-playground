@@ -1,6 +1,6 @@
 import { api } from './api.js';
 
-const MEMBER_NAMES = { claude: 'Claude', gpt: 'GPT-4o', gemini: 'Gemini' };
+const MEMBER_NAMES = { claude: 'Claude', gpt: 'GPT', gemini: 'Gemini' };
 
 let _openTicker = null;
 

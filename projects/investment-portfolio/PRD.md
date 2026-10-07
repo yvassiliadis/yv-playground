@@ -73,7 +73,7 @@ A local Streamlit dashboard backed by a Python engine that:
 
 - **API keys**: Loaded from a `.env` file via `python-dotenv`. Not committed. An `.env.example` is provided.
 
-- **Models used**: `claude-opus-4-7` for Claude, `gpt-4o` for GPT, `gemini-2.0-flash` for Gemini.
+- **Models used**: `claude-sonnet-5-5` for Claude, `gpt-5.6-terra` (picks) and `gpt-5.6-luna` (stock opinions) for GPT, `gemini-3.8-flash` for Gemini.
 
 ---
 

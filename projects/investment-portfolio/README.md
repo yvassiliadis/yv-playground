@@ -45,7 +45,7 @@ flowchart TD
 
     TICK --> FUND["yfinance fundamentals<br/>+ portfolio context"]
 
-    subgraph LLM["② Parallel LLM Calls — Claude · GPT-4o · Gemini"]
+    subgraph LLM["② Parallel LLM Calls — Claude · GPT · Gemini"]
         direction LR
         CL["web_search<br/>macro + sectors<br/>→ picks / opinion"]
         GP["web_search<br/>→ picks / opinion"]

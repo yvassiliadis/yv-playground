@@ -91,7 +91,7 @@
 
 .member-thumb { width: 16px; height: 16px; border-radius: 50%; object-fit: contain; flex-shrink: 0; }
 .member-thumb-lg { width: 26px; height: 26px; }
-.member-thumb[alt="gpt"], .member-thumb-lg[alt="GPT-4o"] { filter: invert(1); }
+.member-thumb[alt="gpt"], .member-thumb-lg[alt="GPT"] { filter: invert(1); }
 
 /* ── Member chip (drawer + members tab) ── */
 .member-chip {
