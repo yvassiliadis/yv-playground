@@ -104,3 +104,31 @@ async def get_current_prices(tickers: list[str]) -> dict[str, float | None]:
         _save_enrichment_cache(cache)
 
     return {t: cache.get(t, {}).get("current_price") for t in tickers}
+
+
+async def get_live_quote(ticker: str) -> dict:
+    """Returns current price and upside percentages for a single ticker, using and updating the enrichment cache."""
+    cache = _load_enrichment_cache()
+    now = datetime.now(timezone.utc)
+
+    stale = (
+        ticker not in cache
+        or (now - datetime.fromisoformat(cache[ticker]["cached_at"])).total_seconds()
+        > _ENRICHMENT_CACHE_TTL_SECONDS
+    )
+
+    if stale:
+        data = await _fetch_ticker_data(ticker)
+        cache[ticker] = {**data, "cached_at": now.isoformat()}
+        _save_enrichment_cache(cache)
+
+    d = cache.get(ticker, {})
+    price = d.get("current_price")
+    mean_t = d.get("mean_target")
+    median_t = d.get("median_target")
+
+    return {
+        "current_price": price,
+        "mean_upside_pct": ((mean_t - price) / price * 100) if price and mean_t else None,
+        "median_upside_pct": ((median_t - price) / price * 100) if price and median_t else None,
+    }

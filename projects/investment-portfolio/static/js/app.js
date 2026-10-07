@@ -80,17 +80,29 @@ function scheduleMarketCloseRefresh() {
 }
 
 // ── Run Committee ─────────────────────────────────────────────────────────────
-async function runCommittee() {
+function openRunAmountModal() {
+  const modal = document.getElementById('run-amount-modal');
+  document.getElementById('run-amount-input').value = latestRun?.investment_amount ?? 10000;
+  modal.style.display = 'flex';
+  document.getElementById('run-amount-input').focus();
+}
+
+function closeRunAmountModal() {
+  document.getElementById('run-amount-modal').style.display = 'none';
+}
+
+async function runCommittee(investmentAmount) {
   const btn = document.getElementById('nav-run-btn');
   btn.disabled = true;
   showLoading('Committee deliberating… (~60–90 seconds)');
   try {
-    latestRun = await api.triggerRun();
+    latestRun = await api.triggerRun(investmentAmount);
     allRuns   = await api.getAllRuns();
     updateAgeBadge(latestRun);
     await refreshPortfolio(latestRun);
     initPerformance(latestRun);
     initTracker(latestRun);
+    await initResearch();
     showToast('Committee run complete!');
   } catch (e) {
     showToast(e.message, 'error');
@@ -139,7 +151,21 @@ async function init() {
   await initSettings();
 
   // Wire controls
-  document.getElementById('nav-run-btn').addEventListener('click', runCommittee);
+  document.getElementById('nav-run-btn').addEventListener('click', openRunAmountModal);
+  document.getElementById('run-amount-cancel').addEventListener('click', closeRunAmountModal);
+  document.getElementById('run-amount-modal').addEventListener('click', e => {
+    if (e.target.id === 'run-amount-modal') closeRunAmountModal();
+  });
+  document.getElementById('run-amount-confirm').addEventListener('click', () => {
+    const amount = Number(document.getElementById('run-amount-input').value);
+    if (!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount', 'error'); return; }
+    closeRunAmountModal();
+    runCommittee(amount);
+  });
+  document.getElementById('run-amount-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('run-amount-confirm').click();
+    if (e.key === 'Escape') closeRunAmountModal();
+  });
   document.getElementById('nav-ask-btn').addEventListener('click', askAdvisor);
   document.getElementById('nav-ticker').addEventListener('keydown', e => {
     if (e.key === 'Enter') askAdvisor();

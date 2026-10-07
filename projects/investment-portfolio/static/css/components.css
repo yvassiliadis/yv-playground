@@ -110,6 +110,9 @@
 .upside-card-val   { font-family: var(--font-mono); font-size: 1.45rem; font-weight: 600; line-height: 1; }
 .upside-card-val.pos { color: var(--green); }
 .upside-card-val.neg { color: var(--red); }
+.upside-card-sub { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-4); margin-top: 3px; }
+.upside-card-sub.pos { color: var(--green); opacity: 0.75; }
+.upside-card-sub.neg { color: var(--red); opacity: 0.75; }
 
 /* ── Rationale text ── */
 .rationale { font-size: 0.84rem; line-height: 1.8; color: var(--text-2); }

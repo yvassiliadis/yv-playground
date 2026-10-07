@@ -13,13 +13,13 @@ function recBadge(rec) {
   return `<span class="rec-badge ${cls}">${rec.toUpperCase()}</span>`;
 }
 
-function allocCell(e, portfolioByTicker) {
+function allocCell(e, portfolioByTicker, investmentAmount) {
   const inPort = portfolioByTicker[e.ticker];
   if (e.recommendation === 'already in portfolio' && inPort?.weight != null) {
-    return '$' + Math.round(10000 * inPort.weight / 100).toLocaleString();
+    return '$' + Math.round(investmentAmount * inPort.weight / 100).toLocaleString();
   }
   return e.suggested_allocation_pct != null
-    ? '$' + Math.round(10000 * e.suggested_allocation_pct / 100).toLocaleString()
+    ? '$' + Math.round(investmentAmount * e.suggested_allocation_pct / 100).toLocaleString()
     : '—';
 }
 
@@ -48,12 +48,14 @@ export async function initResearch() {
   const view = document.getElementById('view-research');
   let allEntries = [];
   let portfolioByTicker = {};
+  let investmentAmount = 10000;
 
   try {
     [allEntries] = await Promise.all([
       api.getAdvisorLog(),
       api.getLatestRun().then(r => {
         if (r?.portfolio) r.portfolio.forEach(h => { portfolioByTicker[h.ticker] = h; });
+        if (r?.investment_amount != null) investmentAmount = r.investment_amount;
       }).catch(() => {}),
     ]);
   } catch (e) { showToast(e.message, 'error'); }
@@ -138,7 +140,7 @@ export async function initResearch() {
           <td class="mono research-ticker-cell">${e.ticker}</td>
           <td>${e.company_name}</td>
           <td>${recBadge(e.recommendation)}</td>
-          <td class="mono">${allocCell(e, portfolioByTicker)}</td>
+          <td class="mono">${allocCell(e, portfolioByTicker, investmentAmount)}</td>
           <td class="mono" style="color:${uColor};">${upside}</td>
           <td class="mono" style="color:${e.fits_philosophy ? 'var(--green)' : 'var(--text-3)'};">${e.fits_philosophy ? 'Yes' : 'No'}</td>
         </tr>`;
