@@ -17,7 +17,7 @@
   - Skips tickers with no available price, recording a warning.
   - Computes each row's `current_value` (shares × price) and `target_value` (`amount × weight / 100`); the delta becomes a `buy`/`sell`/`hold`, with holds for deltas under `min_trade` (default $25) to avoid dust trades.
   - Scales planned buys down so `Σbuys == Σsells − cash_withdrawn` exactly — i.e. sell proceeds (minus any net cash being withdrawn, `current_total − amount`) fund the buys rather than assuming outside cash. If sells can't cover the buys plus withdrawal, buys are clamped to 0 with a warning.
-  - Estimates tax per sell as `max(0, shares × (price − avg_cost)) × tax_rate` (unknown `avg_cost` excludes that row from the tax estimate, with a warning); `full_liquidation_tax` recomputes what tax would be owed if every held position were sold outright, so the frontend can show "tax saved by rebalancing instead of selling everything."
+  - Each sell's own `realized_gain` is `shares × (price − avg_cost)` and can be negative (a loss); its row-level `est_tax` floors that at 0 individually (`max(0, realized_gain) × tax_rate`), so a per-row loss shows `est_tax = 0` rather than a negative number (unknown `avg_cost` excludes that row from both `realized_gain` and `est_tax`, with a warning). The plan-level `est_tax`, however, is not a sum of those per-row values — it nets every sell's `realized_gain` (including negative ones, for rows with known `avg_cost`) first and only then floors the total at 0: `est_tax = max(0, Σ realized_gain across sells with known avg_cost) × tax_rate`. This lets a loss on one sell offset a gain on another before tax is computed. `full_liquidation_tax` recomputes the same net-then-floor logic over every held position sold outright, so the frontend can show "tax saved by rebalancing instead of selling everything."
   - All assumed short-term gains at a single flat `tax_rate` — no per-lot/holding-period tracking (explicitly out of scope for v1).
 
 ## Section B: Settings consolidation
@@ -48,7 +48,7 @@
 ## Section D: Rebalance API and UI
 
 **Backend**
-- `GET /api/rebalance?portfolio=<name>` (`api.py`) — loads the latest committee run (404 if none) and the named tracked portfolio (404 if not found), fetches live prices for the union of held + target tickers, enriches the portfolio to get its current total value (400 if `INVESTMENT_AMOUNT` exceeds it — you can't invest more than you're starting with), then calls `rebalance.plan_rebalance()` with the configured amount/tax rate/min trade and returns the resulting `RebalancePlan`.
+- `GET /api/rebalance?portfolio=<name>` (`api.py`) — loads the latest committee run (404 if none) and the named tracked portfolio (404 if not found), returns 400 if `INVESTMENT_AMOUNT <= 0`, then fetches live prices for the union of held + target tickers, enriches the portfolio to get its current total value (400 if `INVESTMENT_AMOUNT` exceeds it — you can't invest more than you're starting with), then calls `rebalance.plan_rebalance()` with the configured amount/tax rate/min trade and returns the resulting `RebalancePlan`.
 
 **Frontend**
 - New `static/js/views/rebalance.js` / `#view-rebalance` / nav link (`static/index.html`), wired into `app.js`'s `VIEWS` list and hash router (`route()` calls `initRebalance()` on `#rebalance`).
