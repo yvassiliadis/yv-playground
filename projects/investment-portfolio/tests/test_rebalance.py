@@ -214,3 +214,92 @@ def test_full_liquidation_tax_exceeds_partial_sell_tax():
     assert plan.est_tax == pytest.approx(1.6)
     assert plan.full_liquidation_tax == pytest.approx(16.0)
     assert plan.full_liquidation_tax > plan.est_tax
+
+
+def test_duplicate_lots_of_same_ticker_merge_shares_and_weighted_avg_cost():
+    holdings = [
+        PortfolioPosition(ticker="AAA", shares=5.0, avg_cost=10.0),
+        PortfolioPosition(ticker="AAA", shares=5.0, avg_cost=20.0),
+    ]
+    targets = []  # full liquidation
+    prices = {"AAA": 12.0}
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=0.0, tax_rate=0.2, min_trade=1.0
+    )
+
+    assert len(plan.trades) == 1
+    trade = plan.trades[0]
+    assert trade.action == "sell"
+    assert trade.shares == pytest.approx(10.0)
+    # merged avg_cost is share-weighted: (5*10 + 5*20) / 10 = 15.0
+    assert trade.realized_gain == pytest.approx(10.0 * (12.0 - 15.0))
+    assert not any("same company" in w for w in plan.warnings)
+
+
+def test_duplicate_lot_missing_avg_cost_makes_merged_avg_cost_unknown():
+    holdings = [
+        PortfolioPosition(ticker="AAA", shares=5.0, avg_cost=10.0),
+        PortfolioPosition(ticker="AAA", shares=5.0),  # avg_cost unknown
+    ]
+    targets = []
+    prices = {"AAA": 12.0}
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=0.0, tax_rate=0.2, min_trade=1.0
+    )
+    trade = plan.trades[0]
+
+    assert trade.shares == pytest.approx(10.0)
+    assert trade.realized_gain is None
+    assert trade.est_tax is None
+    assert any("avg_cost unknown" in w for w in plan.warnings)
+
+
+def test_goog_googl_cross_alias_holdings_merge_into_one_position():
+    holdings = [
+        PortfolioPosition(ticker="GOOG", shares=2.0, avg_cost=50.0),
+        PortfolioPosition(ticker="GOOGL", shares=3.0, avg_cost=50.0),
+    ]
+    targets = []  # full liquidation
+    prices = {"GOOG": 100.0}  # only the GOOG spelling has a price
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=0.0, tax_rate=0.2, min_trade=1.0
+    )
+
+    assert len(plan.trades) == 1
+    trade = plan.trades[0]
+    assert trade.ticker == "GOOG"  # first-encountered spelling
+    assert trade.current_value == pytest.approx(500.0)  # (2 + 3) shares * 100
+    assert any("GOOG/GOOGL" in w and "merged" in w for w in plan.warnings)
+
+
+def test_held_brk_b_prices_via_brk_hyphen_b_alias_fallback():
+    holdings = [PortfolioPosition(ticker="BRK.B", shares=2.0, avg_cost=100.0)]
+    targets = []  # full liquidation
+    prices = {"BRK-B": 300.0}  # yfinance-style spelling; BRK.B itself is missing
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=0.0, tax_rate=0.2, min_trade=1.0
+    )
+
+    assert len(plan.trades) == 1
+    trade = plan.trades[0]
+    assert trade.ticker == "BRK.B"
+    assert trade.current_value == pytest.approx(600.0)
+    assert not any("price unavailable" in w for w in plan.warnings)
+
+
+def test_negative_cash_withdrawn_surfaces_a_warning():
+    holdings = [PortfolioPosition(ticker="AAA", shares=1.0)]
+    targets = [make_target("AAA", 100)]
+    prices = {"AAA": 10.0}
+
+    # current_total (10) - amount (50) = -40: plan would need extra cash in.
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=50.0, tax_rate=0.2, min_trade=1.0
+    )
+
+    assert plan.cash_withdrawn == pytest.approx(-40.0)
+    assert any("additional cash" in w for w in plan.warnings)

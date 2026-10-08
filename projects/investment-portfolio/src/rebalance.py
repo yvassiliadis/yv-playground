@@ -1,5 +1,5 @@
 from .models import PortfolioHolding, PortfolioPosition, RebalancePlan, RebalanceTrade
-from .tickers import canonical_ticker
+from .tickers import alternate_spellings, canonical_ticker
 
 
 def plan_rebalance(
@@ -12,9 +12,36 @@ def plan_rebalance(
 ) -> RebalancePlan:
     warnings: list[str] = []
 
-    holdings_by_canon: dict[str, PortfolioPosition] = {}
+    # Merge holdings that resolve to the same canonical ticker: multiple lots of
+    # the same ticker (e.g. separate tax lots), and/or the same company held
+    # under different share-class spellings (e.g. GOOG + GOOGL).
+    groups: dict[str, list[PortfolioPosition]] = {}
     for pos in holdings:
-        holdings_by_canon[canonical_ticker(pos.ticker)] = pos
+        groups.setdefault(canonical_ticker(pos.ticker), []).append(pos)
+
+    holdings_by_canon: dict[str, PortfolioPosition] = {}
+    for canon, group in groups.items():
+        if len(group) == 1:
+            holdings_by_canon[canon] = group[0]
+            continue
+
+        total_shares = sum(p.shares for p in group)
+        if all(p.avg_cost is not None for p in group) and total_shares:
+            merged_avg_cost = sum(p.shares * p.avg_cost for p in group) / total_shares
+        else:
+            merged_avg_cost = None
+
+        spellings = list(dict.fromkeys(p.ticker for p in group))
+        if len(spellings) > 1:
+            warnings.append(
+                f"{'/'.join(spellings)} are the same company (held under both spellings) — merged for this plan"
+            )
+
+        holdings_by_canon[canon] = PortfolioPosition(
+            ticker=spellings[0],
+            shares=total_shares,
+            avg_cost=merged_avg_cost,
+        )
 
     targets_by_canon: dict[str, PortfolioHolding] = {}
     for tgt in targets:
@@ -43,6 +70,13 @@ def plan_rebalance(
         display_ticker = pos.ticker if pos is not None else tgt.ticker
 
         price = prices.get(display_ticker)
+        if price is None:
+            # Same company can be priced under the other known spelling (e.g.
+            # BRK.B / BRK-B) even though the display ticker's own lookup missed.
+            for alt in alternate_spellings(display_ticker):
+                price = prices.get(alt)
+                if price is not None:
+                    break
         if price is None:
             warnings.append(f"{display_ticker}: price unavailable, excluded from plan")
             continue
@@ -86,6 +120,12 @@ def plan_rebalance(
 
     total_sells = sum(-r["trade_value"] for r in rows if r["action"] == "sell")
     cash_withdrawn = current_total - amount
+    if cash_withdrawn < 0:
+        warnings.append(
+            f"Plan requires ${abs(cash_withdrawn):,.2f} in additional cash — "
+            "rebalancing is intended to be self-funded; this usually means a "
+            "holding's value couldn't be fully accounted for (see other warnings)."
+        )
     target_buy_sum = total_sells - cash_withdrawn
     raw_buy_sum = sum(r["trade_value"] for r in rows if r["action"] == "buy")
 

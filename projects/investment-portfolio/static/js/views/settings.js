@@ -98,9 +98,12 @@ export async function initSettings() {
     const label = document.getElementById('current-portfolio-value-label');
     const btn = document.getElementById('use-current-value-btn');
     if (!label || !btn) return;
-    if (match) {
+    if (match && match.total_value != null) {
       label.textContent = `${match.name} current value: $${match.total_value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
       btn.disabled = false;
+    } else if (match) {
+      label.textContent = `${match.name} current value: unavailable`;
+      btn.disabled = true;
     } else {
       label.textContent = 'No rebalance portfolio selected.';
       btn.disabled = true;
@@ -117,38 +120,53 @@ export async function initSettings() {
         initMembers(updated);
         await initPerformance(updated);
       }
+      return true;
     } catch (e) {
       showToast(e.message, 'error');
+      return false;
     }
+  }
+
+  // Re-reads the DOM inputs from `settings` after a rollback, so a rejected
+  // save can't leave a bad value sitting in both the in-memory object and
+  // the visible input (which would otherwise poison every later save).
+  function syncNumericInputs() {
+    document.getElementById('investment-amount-input').value = settings.investment_amount ?? '';
+    document.getElementById('tax-rate-input').value = (settings.tax_rate ?? 0) * 100;
+    document.getElementById('min-trade-input').value = settings.min_trade ?? '';
+    document.getElementById('rebalance-portfolio-input').value = settings.rebalance_portfolio ?? '';
   }
 
   view.addEventListener('click', async e => {
     if (!e.target.classList.contains('settings-tag-remove')) return;
     const { key, val } = e.target.dataset;
+    const snapshot = { ...settings };
     if (key === 'ticker') settings.excluded_tickers = settings.excluded_tickers.filter(x => x !== val);
     if (key === 'sector') settings.excluded_sectors = settings.excluded_sectors.filter(x => x !== val);
-    await save();
+    if (!(await save())) settings = snapshot;
     rerenderTags();
   });
 
   async function addTicker() {
     const v = document.getElementById('new-ticker').value.toUpperCase().trim();
     if (!v || settings.excluded_tickers.includes(v)) return;
-    settings.excluded_tickers.push(v);
-    settings.excluded_tickers.sort();
-    await save();
+    const snapshot = { ...settings };
+    settings.excluded_tickers = [...settings.excluded_tickers, v].sort();
+    const ok = await save();
+    if (!ok) settings = snapshot;
     rerenderTags();
-    document.getElementById('new-ticker').value = '';
+    if (ok) document.getElementById('new-ticker').value = '';
   }
 
   async function addSector() {
     const v = document.getElementById('new-sector').value.trim();
     if (!v || settings.excluded_sectors.includes(v)) return;
-    settings.excluded_sectors.push(v);
-    settings.excluded_sectors.sort();
-    await save();
+    const snapshot = { ...settings };
+    settings.excluded_sectors = [...settings.excluded_sectors, v].sort();
+    const ok = await save();
+    if (!ok) settings = snapshot;
     rerenderTags();
-    document.getElementById('new-sector').value = '';
+    if (ok) document.getElementById('new-sector').value = '';
   }
 
   document.getElementById('add-ticker-btn').addEventListener('click', addTicker);
@@ -159,36 +177,41 @@ export async function initSettings() {
   document.getElementById('investment-amount-input').addEventListener('change', async e => {
     const v = parseFloat(e.target.value);
     if (Number.isNaN(v)) return;
+    const snapshot = { ...settings };
     settings.investment_amount = v;
-    await save();
+    if (!(await save())) { settings = snapshot; syncNumericInputs(); }
   });
 
   document.getElementById('tax-rate-input').addEventListener('change', async e => {
     const v = parseFloat(e.target.value);
     if (Number.isNaN(v)) return;
+    const snapshot = { ...settings };
     settings.tax_rate = v / 100;
-    await save();
+    if (!(await save())) { settings = snapshot; syncNumericInputs(); }
   });
 
   document.getElementById('min-trade-input').addEventListener('change', async e => {
     const v = parseFloat(e.target.value);
     if (Number.isNaN(v)) return;
+    const snapshot = { ...settings };
     settings.min_trade = v;
-    await save();
+    if (!(await save())) { settings = snapshot; syncNumericInputs(); }
   });
 
   document.getElementById('rebalance-portfolio-input').addEventListener('change', async e => {
+    const snapshot = { ...settings };
     settings.rebalance_portfolio = e.target.value || null;
     rerenderCurrentValueLabel();
-    await save();
+    if (!(await save())) { settings = snapshot; syncNumericInputs(); rerenderCurrentValueLabel(); }
   });
 
   document.getElementById('use-current-value-btn').addEventListener('click', async () => {
     const match = currentMatchedPortfolio();
-    if (!match) return;
+    if (!match || match.total_value == null) return;
+    const snapshot = { ...settings };
     settings.investment_amount = match.total_value;
     document.getElementById('investment-amount-input').value = match.total_value;
-    await save();
+    if (!(await save())) { settings = snapshot; syncNumericInputs(); }
   });
 
   rerenderCurrentValueLabel();

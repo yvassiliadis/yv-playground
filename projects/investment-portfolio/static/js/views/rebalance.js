@@ -59,7 +59,7 @@ function tradesTable(trades) {
             <td style="text-align:right;padding:6px 8px;">${formatCurrency(t.current_value)}</td>
             <td style="text-align:right;padding:6px 8px;">${formatCurrency(t.target_value)}</td>
             <td style="text-align:right;padding:6px 8px;">${formatCurrency(t.trade_value)}</td>
-            <td style="text-align:right;padding:6px 8px;">${t.shares}</td>
+            <td style="text-align:right;padding:6px 8px;">${t.shares.toFixed(4)}</td>
             <td style="text-align:right;padding:6px 0;">${t.est_tax != null ? formatCurrency(t.est_tax) : '–'}</td>
           </tr>`).join('')}
       </tbody>
@@ -121,13 +121,14 @@ export async function initRebalance() {
     }
 
     const saved = plan.full_liquidation_tax - plan.est_tax;
+    const savedColor = saved >= 0 ? 'var(--green)' : 'var(--red)';
 
     content.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
         ${metricCard('Sells', formatCurrency(plan.total_sells), 'var(--red)')}
         ${metricCard('Buys', formatCurrency(plan.total_buys), 'var(--green)')}
         ${metricCard('Est. Tax', formatCurrency(plan.est_tax))}
-        ${metricCard('Saved vs. Sell-All', formatCurrency(saved), 'var(--green)')}
+        ${metricCard('Saved vs. Sell-All', formatCurrency(saved), savedColor)}
         ${metricCard('Cash Withdrawn', formatCurrency(plan.cash_withdrawn))}
       </div>
       ${plan.warnings.length ? `

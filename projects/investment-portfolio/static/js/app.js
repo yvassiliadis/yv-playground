@@ -134,12 +134,23 @@ async function init() {
 
   updateAgeBadge(latestRun);
 
-  // Init all views with data
-  initPortfolio(latestRun);
-  initMembers(latestRun);
-  initHistory(allRuns);
-  await initResearch();
-  await initSettings();
+  // Init all views with data. Each view is isolated so one view's failure
+  // (e.g. a tracked portfolio with an unpriced position crashing Settings)
+  // can't block the button-wiring/routing code below from running.
+  const initSteps = [
+    ['portfolio', () => initPortfolio(latestRun)],
+    ['members', () => initMembers(latestRun)],
+    ['history', () => initHistory(allRuns)],
+    ['research', () => initResearch()],
+    ['settings', () => initSettings()],
+  ];
+  for (const [name, fn] of initSteps) {
+    try {
+      await fn();
+    } catch (e) {
+      console.error(`init ${name}:`, e);
+    }
+  }
 
   // Wire controls
   document.getElementById('nav-run-btn').addEventListener('click', () => runCommittee());

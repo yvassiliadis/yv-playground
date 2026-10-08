@@ -33,7 +33,7 @@
 
 **Frontend**
 - The "Run Committee" amount-entry modal is gone (`static/js/app.js::runCommittee()` just calls `api.triggerRun()`); the amount is set once in Settings and reused for every run.
-- `static/js/drawer.js` and `static/js/views/research.js` fetch `/api/settings` and use `settings.investment_amount` instead of a hardcoded 10000, falling back to the frozen `run.investment_amount` for older runs where the fetch fails or returns null.
+- `static/js/drawer.js` and `static/js/views/research.js` fetch `/api/settings` and use `settings.investment_amount` instead of a hardcoded 10000, falling back to that same hardcoded `10000` when the fetch fails or returns null.
 - `static/js/views/settings.js` gained four new controls: Investment Amount (with a "Use current value" button that pulls the selected rebalance portfolio's live `total_value`), Default Rebalance Portfolio (dropdown over tracked portfolios), Tax Rate % (stored as a 0–1 fraction, displayed ×100), and Min Trade $. Each field saves independently via `PUT /api/settings` on change/blur.
 
 ## Section C: Held tickers always reach the committee
