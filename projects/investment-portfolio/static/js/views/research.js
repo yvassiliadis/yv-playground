@@ -51,13 +51,15 @@ export async function initResearch() {
   let investmentAmount = 10000;
 
   try {
-    [allEntries] = await Promise.all([
+    let settings;
+    [allEntries, , settings] = await Promise.all([
       api.getAdvisorLog(),
       api.getLatestRun().then(r => {
         if (r?.portfolio) r.portfolio.forEach(h => { portfolioByTicker[h.ticker] = h; });
-        if (r?.investment_amount != null) investmentAmount = r.investment_amount;
       }).catch(() => {}),
+      api.getSettings().catch(() => null),
     ]);
+    if (settings?.investment_amount != null) investmentAmount = settings.investment_amount;
   } catch (e) { showToast(e.message, 'error'); }
 
   const heading = `

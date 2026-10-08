@@ -56,9 +56,8 @@ export function openDrawer(holding, run = null) {
   document.getElementById('d-members').innerHTML = (d.nominated_by || []).map(m => `
     <div class="member-chip"><img src="/static/${m.toLowerCase()}.png" class="member-thumb" alt="${m.toLowerCase()}">${MEMBER_NAMES[m.toLowerCase()] || m}</div>`).join('');
 
-  const totalAmount = run?.investment_amount ?? 10000;
-  const investAmt = Math.round(totalAmount * (d.weight / 100));
-  document.getElementById('d-invest').textContent = `Recommended investment: $${investAmt.toLocaleString()} of $${totalAmount.toLocaleString()}`;
+  document.getElementById('d-invest').textContent = 'Recommended investment: …';
+  fetchInvestmentAmount(d);
 
   document.getElementById('d-rationale').textContent = d.rationale;
 
@@ -98,6 +97,18 @@ export function initDrawer() {
   document.getElementById('d-close').addEventListener('click', closeDrawer);
   document.getElementById('backdrop').addEventListener('click', closeDrawer);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+}
+
+async function fetchInvestmentAmount(d) {
+  let totalAmount = 10000;
+  try {
+    const settings = await api.getSettings();
+    if (settings?.investment_amount != null) totalAmount = settings.investment_amount;
+  } catch (e) {}
+  if (_openTicker !== d.ticker) return;
+
+  const investAmt = Math.round(totalAmount * (d.weight / 100));
+  document.getElementById('d-invest').textContent = `Recommended investment: $${investAmt.toLocaleString()} of $${totalAmount.toLocaleString()}`;
 }
 
 async function fetchLiveQuote(ticker) {

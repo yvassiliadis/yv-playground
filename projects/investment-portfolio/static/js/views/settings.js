@@ -4,11 +4,24 @@ import { refreshPortfolio } from './portfolio.js';
 import { initMembers } from './members.js';
 import { initPerformance } from './performance.js';
 
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export async function initSettings() {
   const view = document.getElementById('view-settings');
-  let settings = { excluded_tickers: [], excluded_sectors: [] };
+  let settings = {
+    excluded_tickers: [], excluded_sectors: [],
+    investment_amount: 10000, tax_rate: 0, min_trade: 0, rebalance_portfolio: null,
+  };
+  let portfolios = [];
 
   try { settings = await api.getSettings(); } catch (_) {}
+  try { portfolios = await api.getPortfolios(); } catch (_) {}
 
   function renderTags(items, key) {
     return items.map(item => `
@@ -48,7 +61,51 @@ export async function initSettings() {
           <button class="settings-btn primary" id="add-sector-btn">Add</button>
         </div>
       </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;max-width:800px;margin-top:40px;">
+      <div>
+        <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;font-style:italic;color:var(--text-2);margin-bottom:16px;">Investment Amount</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input class="settings-input" id="investment-amount-input" type="number" min="0.01" step="any" value="${settings.investment_amount ?? ''}" style="width:140px;">
+          <button class="settings-btn" id="use-current-value-btn">Use current value</button>
+        </div>
+        <div id="current-portfolio-value-label" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-4);"></div>
+      </div>
+      <div>
+        <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;font-style:italic;color:var(--text-2);margin-bottom:16px;">Default Rebalance Portfolio</div>
+        <select class="settings-input" id="rebalance-portfolio-input" style="width:200px;">
+          <option value="">— none —</option>
+          ${portfolios.map(p => `<option value="${esc(p.name)}"${p.name === settings.rebalance_portfolio ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;font-style:italic;color:var(--text-2);margin-bottom:16px;">Tax Rate %</div>
+        <input class="settings-input" id="tax-rate-input" type="number" min="0" max="99.99" step="any" value="${(settings.tax_rate ?? 0) * 100}" style="width:100px;">
+      </div>
+      <div>
+        <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;font-style:italic;color:var(--text-2);margin-bottom:16px;">Min Trade $</div>
+        <input class="settings-input" id="min-trade-input" type="number" min="0" step="any" value="${settings.min_trade ?? ''}" style="width:120px;">
+      </div>
     </div>`;
+
+  function currentMatchedPortfolio() {
+    return portfolios.find(p => p.name === settings.rebalance_portfolio) ?? null;
+  }
+
+  function rerenderCurrentValueLabel() {
+    const match = currentMatchedPortfolio();
+    const label = document.getElementById('current-portfolio-value-label');
+    const btn = document.getElementById('use-current-value-btn');
+    if (!label || !btn) return;
+    if (match) {
+      label.textContent = `${match.name} current value: $${match.total_value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      btn.disabled = false;
+    } else {
+      label.textContent = 'No rebalance portfolio selected.';
+      btn.disabled = true;
+    }
+  }
 
   async function save() {
     try {
@@ -98,4 +155,41 @@ export async function initSettings() {
   document.getElementById('add-sector-btn').addEventListener('click', addSector);
   document.getElementById('new-ticker').addEventListener('keydown', e => { if (e.key === 'Enter') addTicker(); });
   document.getElementById('new-sector').addEventListener('keydown', e => { if (e.key === 'Enter') addSector(); });
+
+  document.getElementById('investment-amount-input').addEventListener('change', async e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isNaN(v)) return;
+    settings.investment_amount = v;
+    await save();
+  });
+
+  document.getElementById('tax-rate-input').addEventListener('change', async e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isNaN(v)) return;
+    settings.tax_rate = v / 100;
+    await save();
+  });
+
+  document.getElementById('min-trade-input').addEventListener('change', async e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isNaN(v)) return;
+    settings.min_trade = v;
+    await save();
+  });
+
+  document.getElementById('rebalance-portfolio-input').addEventListener('change', async e => {
+    settings.rebalance_portfolio = e.target.value || null;
+    rerenderCurrentValueLabel();
+    await save();
+  });
+
+  document.getElementById('use-current-value-btn').addEventListener('click', async () => {
+    const match = currentMatchedPortfolio();
+    if (!match) return;
+    settings.investment_amount = match.total_value;
+    document.getElementById('investment-amount-input').value = match.total_value;
+    await save();
+  });
+
+  rerenderCurrentValueLabel();
 }
