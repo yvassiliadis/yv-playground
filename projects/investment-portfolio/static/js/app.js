@@ -7,6 +7,7 @@ import { initHistory }      from './views/history.js';
 import { initResearch }     from './views/research.js';
 import { initSettings }     from './views/settings.js';
 import { initTracker }      from './views/tracker.js';
+import { initRebalance }    from './views/rebalance.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 export let latestRun = null;
@@ -37,7 +38,7 @@ function updateAgeBadge(run) {
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
-const VIEWS = ['portfolio', 'performance', 'members', 'history', 'research', 'settings', 'tracker'];
+const VIEWS = ['portfolio', 'performance', 'members', 'history', 'research', 'settings', 'tracker', 'rebalance'];
 
 const DROPDOWN_VIEWS = ['history'];
 
@@ -60,6 +61,7 @@ function route() {
   if (view === 'portfolio') onPortfolioActivated();
   if (view === 'performance') initPerformance(latestRun);
   if (view === 'tracker') initTracker(latestRun);
+  if (view === 'rebalance') initRebalance();
 }
 
 function scheduleMarketCloseRefresh() {
@@ -80,23 +82,12 @@ function scheduleMarketCloseRefresh() {
 }
 
 // ── Run Committee ─────────────────────────────────────────────────────────────
-function openRunAmountModal() {
-  const modal = document.getElementById('run-amount-modal');
-  document.getElementById('run-amount-input').value = latestRun?.investment_amount ?? 10000;
-  modal.style.display = 'flex';
-  document.getElementById('run-amount-input').focus();
-}
-
-function closeRunAmountModal() {
-  document.getElementById('run-amount-modal').style.display = 'none';
-}
-
-async function runCommittee(investmentAmount) {
+async function runCommittee() {
   const btn = document.getElementById('nav-run-btn');
   btn.disabled = true;
   showLoading('Committee deliberating… (~60–90 seconds)');
   try {
-    latestRun = await api.triggerRun(investmentAmount);
+    latestRun = await api.triggerRun();
     allRuns   = await api.getAllRuns();
     updateAgeBadge(latestRun);
     await refreshPortfolio(latestRun);
@@ -151,21 +142,7 @@ async function init() {
   await initSettings();
 
   // Wire controls
-  document.getElementById('nav-run-btn').addEventListener('click', openRunAmountModal);
-  document.getElementById('run-amount-cancel').addEventListener('click', closeRunAmountModal);
-  document.getElementById('run-amount-modal').addEventListener('click', e => {
-    if (e.target.id === 'run-amount-modal') closeRunAmountModal();
-  });
-  document.getElementById('run-amount-confirm').addEventListener('click', () => {
-    const amount = Number(document.getElementById('run-amount-input').value);
-    if (!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount', 'error'); return; }
-    closeRunAmountModal();
-    runCommittee(amount);
-  });
-  document.getElementById('run-amount-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('run-amount-confirm').click();
-    if (e.key === 'Escape') closeRunAmountModal();
-  });
+  document.getElementById('nav-run-btn').addEventListener('click', () => runCommittee());
   document.getElementById('nav-ask-btn').addEventListener('click', askAdvisor);
   document.getElementById('nav-ticker').addEventListener('keydown', e => {
     if (e.key === 'Enter') askAdvisor();
