@@ -10,6 +10,9 @@ from ..config import EXCLUDED_TICKERS
 from ..models import Pick
 from .philosophy import ADVISOR_PHILOSOPHY, MANDATE
 
+PICKS_MODEL = "gemini-3.8-flash"
+OPINION_MODEL = "gemini-3.8-flash"
+
 SYSTEM_PROMPT = """You are a member of an investment committee. Your philosophy combines value investing (Buffett, Graham), growth investing (Fisher, Lynch), and disciplined momentum — applied with aggressive long-term conviction.
 
 Before making picks, use Google Search to understand what's working in the market RIGHT NOW:
@@ -69,7 +72,7 @@ async def get_picks(client: genai.Client, screened_section: str = "") -> list[Pi
     if screened_section:
         system = system + "\n\n" + screened_section
     response = await client.aio.models.generate_content(
-        model="gemini-3.8-flash",
+        model=PICKS_MODEL,
         contents="Research current macro conditions and sector momentum using Google Search, then generate your best portfolio picks with variant perception for each.",
         config=types.GenerateContentConfig(
             tools=[types.Tool(google_search=types.GoogleSearch())],
@@ -142,7 +145,7 @@ async def get_stock_opinion(
     if portfolio_context:
         content = f"{content}\n\n{portfolio_context}"
     response = await client.aio.models.generate_content(
-        model="gemini-3.8-flash",
+        model=OPINION_MODEL,
         contents=content,
         config=types.GenerateContentConfig(
             system_instruction=ADVISOR_SYSTEM_PROMPT,

@@ -9,6 +9,9 @@ from ..config import EXCLUDED_TICKERS
 from ..models import Pick
 from .philosophy import ADVISOR_PHILOSOPHY, MANDATE
 
+PICKS_MODEL = "gpt-5.6-terra"
+OPINION_MODEL = "gpt-5.6-luna"
+
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a member of an investment committee. Your philosophy combines value investing (Buffett, Graham), growth investing (Fisher, Lynch), and disciplined momentum — applied with aggressive long-term conviction.
@@ -107,7 +110,7 @@ async def get_picks(client: AsyncOpenAI, screened_section: str = "") -> list[Pic
 
     t0 = time.monotonic()
     response = await client.responses.create(
-        model="gpt-5.6-terra",
+        model=PICKS_MODEL,
         instructions=system,
         input="Research current macro conditions and sector momentum using web search, then generate your best portfolio picks with variant perception for each.",
         tools=[{"type": "web_search_preview"}],
@@ -163,7 +166,7 @@ async def get_stock_opinion(
     if portfolio_context:
         content = f"{content}\n\n{portfolio_context}"
     response = await client.chat.completions.create(
-        model="gpt-5.6-luna",
+        model=OPINION_MODEL,
         max_completion_tokens=4096,
         reasoning_effort="low",
         messages=[
