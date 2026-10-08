@@ -71,7 +71,10 @@ def plan_rebalance(
 
     for r in rows:
         delta = r["delta"]
-        if abs(delta) < min_trade:
+        if delta == 0:
+            r["action"] = "hold"
+            r["trade_value"] = 0.0
+        elif abs(delta) < min_trade:
             r["action"] = "hold"
             r["trade_value"] = 0.0
         elif delta > 0:

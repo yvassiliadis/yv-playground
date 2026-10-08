@@ -188,6 +188,20 @@ def test_held_ticker_not_in_run_sells_and_new_ticker_buys():
     assert trades["CORR"].current_value == pytest.approx(0.0)
 
 
+def test_zero_delta_holds_even_when_min_trade_is_zero():
+    holdings = [PortfolioPosition(ticker="AAA", shares=10.0)]
+    targets = [make_target("AAA", 100)]  # target$ = 100, current 100 -> delta 0
+    prices = {"AAA": 10.0}
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=100.0, tax_rate=0.2, min_trade=0.0
+    )
+    trade = plan.trades[0]
+
+    assert trade.action == "hold"
+    assert trade.trade_value == pytest.approx(0.0)
+
+
 def test_full_liquidation_tax_exceeds_partial_sell_tax():
     holdings = [PortfolioPosition(ticker="AAA", shares=10.0, avg_cost=2.0)]
     targets = [make_target("AAA", 90)]  # target$ = 90, current 100 -> partial sell
