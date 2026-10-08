@@ -14,6 +14,7 @@ from finvizfinance.screener.financial import Financial
 from finvizfinance.screener.overview import Overview
 
 from .config import EXCLUDED_SECTORS, EXCLUDED_TICKERS
+from .tickers import canonical_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class ScreenedStock:
     roic: float | None
     operating_margin: float | None
     earnings_date: str | None
-    tier: str  # "suggestion" | "opportunity"
+    tier: str  # "suggestion" | "opportunity" | "additional"
 
 
 def _to_float(val) -> float | None:
@@ -296,6 +297,79 @@ async def screen_universe() -> list[ScreenedStock]:
     return result
 
 
+async def add_held_tickers(
+    stocks: list[ScreenedStock], held: list[str]
+) -> list[ScreenedStock]:
+    """Ensure every held ticker appears in the screened list.
+
+    Tickers already present (alias-aware) or manually excluded are skipped.
+    Anything else is fetched via yfinance and appended with tier="additional"
+    so a held position never silently disappears from a run just because
+    Finviz/FCF filters would have dropped it.
+    """
+    existing_canonical = {canonical_ticker(s.ticker) for s in stocks}
+    excluded_tickers = {t.upper() for t in EXCLUDED_TICKERS}
+
+    candidates: list[str] = []
+    seen_canonical: set[str] = set()
+    for ticker in held:
+        canon = canonical_ticker(ticker)
+        if canon in existing_canonical or canon in seen_canonical:
+            continue
+        if ticker.upper() in excluded_tickers or canon in excluded_tickers:
+            continue
+        seen_canonical.add(canon)
+        candidates.append(ticker)
+
+    if not candidates:
+        return list(stocks)
+
+    sem = asyncio.Semaphore(MAX_CONCURRENT_FCF_FETCHES)
+    counter = [0]
+    results = await asyncio.gather(
+        *[_fetch_fcf_info(t, sem, counter, len(candidates)) for t in candidates]
+    )
+
+    added: list[ScreenedStock] = []
+    for ticker, info in results:
+        if not info:
+            added.append(
+                ScreenedStock(
+                    ticker=ticker,
+                    company_name=ticker,
+                    industry=None,
+                    gross_margin=None,
+                    roe=None,
+                    roic=None,
+                    operating_margin=None,
+                    earnings_date=None,
+                    tier="additional",
+                )
+            )
+            continue
+
+        sector = info.get("sector")
+        if sector in EXCLUDED_SECTORS:
+            continue
+
+        company_name = info.get("longName") or info.get("shortName") or ticker
+        added.append(
+            ScreenedStock(
+                ticker=ticker,
+                company_name=company_name,
+                industry=info.get("industry"),
+                gross_margin=_to_float(info.get("grossMargins")),
+                roe=_to_float(info.get("returnOnEquity")),
+                roic=None,
+                operating_margin=_to_float(info.get("operatingMargins")),
+                earnings_date=None,
+                tier="additional",
+            )
+        )
+
+    return stocks + added
+
+
 def format_for_prompt(stocks: list[ScreenedStock]) -> str:
     """Format screened stocks as two labeled sections for member prompts."""
     if not stocks:
@@ -323,6 +397,9 @@ def format_for_prompt(stocks: list[ScreenedStock]) -> str:
     opportunities = sorted(
         [s for s in stocks if s.tier == "opportunity"], key=lambda x: x.ticker
     )
+    additional = sorted(
+        [s for s in stocks if s.tier == "additional"], key=lambda x: x.ticker
+    )
 
     lines: list[str] = []
 
@@ -339,6 +416,14 @@ def format_for_prompt(stocks: list[ScreenedStock]) -> str:
             "OPPORTUNITIES — turnaround/recovery plays (negative ROE but strong FCF; higher risk, use sparingly):"
         )
         lines.extend(stock_line(s) for s in opportunities)
+
+    if additional:
+        if lines:
+            lines.append("")
+        lines.append(
+            "ADDITIONAL — not from the screen, eligible picks judged on merits:"
+        )
+        lines.extend(stock_line(s) for s in additional)
 
     lines.append("")
     lines.append("Pick only from the stocks listed above.")

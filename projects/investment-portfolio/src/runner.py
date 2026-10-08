@@ -14,11 +14,12 @@ from openai import AsyncOpenAI
 from .committee import claude_member, gemini_member, gpt_member
 
 logger = logging.getLogger(__name__)
+from . import config, portfolios
 from .committee.aggregator import build_portfolio
 from .config import EXCLUDED_TICKERS
 from .enrichment import enrich_picks_with_prices
 from .models import CommitteeRun, Pick, WebSource
-from .screener import format_for_prompt, screen_universe
+from .screener import add_held_tickers, format_for_prompt, screen_universe
 
 RUNS_DIR = Path(__file__).parent.parent / "data" / "runs"
 _PICKS_CACHE_DIR = Path(__file__).parent.parent / "data" / "picks_cache"
@@ -133,7 +134,17 @@ async def run_committee(
     gemini_client: genai.Client,
     investment_amount: float = 10000.0,
 ) -> CommitteeRun:
-    screened = await screen_universe()
+    held = (
+        [
+            pos.ticker
+            for p in portfolios.load()
+            if p.name == config.REBALANCE_PORTFOLIO
+            for pos in p.positions
+        ]
+        if config.REBALANCE_PORTFOLIO
+        else []
+    )
+    screened = await add_held_tickers(await screen_universe(), held)
     screened_section = format_for_prompt(screened)
 
     claude_cache = _load_picks_cache("claude", claude_member.PICKS_MODEL)

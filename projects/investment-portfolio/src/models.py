@@ -70,3 +70,27 @@ class PortfolioPosition(BaseModel):
 class TrackedPortfolio(BaseModel):
     name: str
     positions: list[PortfolioPosition]
+
+
+class RebalanceTrade(BaseModel):
+    ticker: str
+    company_name: str
+    action: str  # "buy" | "sell" | "hold"
+    current_value: float
+    target_value: float
+    trade_value: float  # positive for buy, negative for sell, 0 for hold
+    shares: float  # fractional shares to trade, 0 for hold
+    realized_gain: float | None = None  # sells only; None if avg_cost unknown
+    est_tax: float | None = None  # sells only; None if avg_cost unknown
+
+
+class RebalancePlan(BaseModel):
+    trades: list[RebalanceTrade]
+    current_total: float
+    target_total: float
+    cash_withdrawn: float
+    total_buys: float
+    total_sells: float
+    est_tax: float
+    full_liquidation_tax: float
+    warnings: list[str] = []

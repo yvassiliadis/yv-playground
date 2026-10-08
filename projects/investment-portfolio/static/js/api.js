@@ -14,7 +14,7 @@ async function request(method, path, body) {
 export const api = {
   getLatestRun:     ()       => request('GET',  '/api/runs/latest'),
   getAllRuns:        ()       => request('GET',  '/api/runs'),
-  triggerRun:       (investmentAmount) => request('POST', '/api/runs', investmentAmount != null ? { investment_amount: investmentAmount } : undefined),
+  triggerRun:       ()        => request('POST', '/api/runs'),
   getPerformance:   (t, w)   => request('GET',  `/api/performance?tickers=${t}&weights=${w}`),
   getAdvisorLog:    ()       => request('GET',  '/api/advisor/log'),
   askAdvisor:       (ticker) => request('POST', '/api/advisor', { ticker }),
@@ -25,6 +25,7 @@ export const api = {
   savePortfolios:           (data)       => request('PUT',    '/api/portfolios', data),
   deletePortfolio:          (name)       => request('DELETE', `/api/portfolios/${encodeURIComponent(name)}`),
   getPortfoliosPerformance: ()           => request('GET',    '/api/portfolios/performance'),
+  getRebalance:             (portfolio)  => request('GET',    `/api/rebalance?portfolio=${encodeURIComponent(portfolio)}`),
   importPortfolio: async (name, file) => {
     const form = new FormData();
     form.append('name', name);

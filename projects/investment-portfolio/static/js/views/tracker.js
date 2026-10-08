@@ -41,7 +41,8 @@ function filterSeries(rawDict, rangeOpt) {
 
 function formatCurrency(v) {
   if (v == null) return '–';
-  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const sign = v < 0 ? '-' : '';
+  return sign + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function formatReturn(v) {
