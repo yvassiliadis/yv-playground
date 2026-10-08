@@ -169,8 +169,9 @@ async def get_research(client: anthropic.AsyncAnthropic) -> tuple[str, list[WebS
 
     while True:
         response = await client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
+            model="claude-sonnet-5-5",
+            max_tokens=8192,
+            output_config={"effort": "medium"},
             system=RESEARCH_SYSTEM_PROMPT,
             tools=[
                 {
@@ -226,8 +227,9 @@ async def get_picks(
 
     t0 = time.monotonic()
     response = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
+        model="claude-sonnet-5-5",
+        max_tokens=8192,
+        output_config={"effort": "medium"},
         system=system,
         messages=[
             {
@@ -235,7 +237,7 @@ async def get_picks(
                 "content": "Based on the market research and screened stock list provided, generate your best portfolio picks with variant perception for each.",
             }
         ],
-        timeout=120.0,
+        timeout=300.0,
     )
     logger.info("Picks generation: %.1fs", time.monotonic() - t0)
     return _parse_picks(response)
@@ -255,13 +257,16 @@ async def get_stock_opinion(
     if portfolio_context:
         content = f"{content}\n\n{portfolio_context}"
     message = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
+        model="claude-sonnet-5-5",
+        max_tokens=4096,
+        output_config={"effort": "low"},
         system=ADVISOR_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": content}],
     )
 
-    raw = message.content[0].text
+    raw = next(
+        (block.text for block in message.content if block.type == "text"), ""
+    )
     start, end = raw.find("{"), raw.rfind("}") + 1
     if start == -1 or end <= start:
         raise ValueError(f"No JSON object in Claude advisor response for {ticker}")

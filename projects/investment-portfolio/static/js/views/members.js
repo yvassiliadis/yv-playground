@@ -1,6 +1,6 @@
 const MEMBER_CONFIG = {
   claude: { label: 'Claude',  color: '#f59e0b', cls: 'claude' },
-  gpt:    { label: 'GPT-4o',  color: '#10b981', cls: 'gpt'    },
+  gpt:    { label: 'GPT',  color: '#10b981', cls: 'gpt'    },
   gemini: { label: 'Gemini',  color: '#3b82f6', cls: 'gemini' },
 };
 
