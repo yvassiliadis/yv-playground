@@ -12,10 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from openai import AsyncOpenAI
 
-from src import advisor_log, demo, portfolios
+from src import advisor_log, demo, portfolios, rebalance
 from src import config as exclusions
 from src.advisor import ask_committee
-from src.enrichment import get_live_quote
+from src.enrichment import get_current_prices, get_live_quote
 from src.models import TrackedPortfolio
 from src.performance import portfolio_vs_benchmarks, tracked_portfolios_performance
 from src.runner import load_all_runs, load_latest_run, run_committee
@@ -215,3 +215,41 @@ async def get_portfolios_performance():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return data
+
+
+@app.get("/api/rebalance")
+async def get_rebalance(portfolio: str):
+    latest = load_latest_run()
+    if latest is None:
+        raise HTTPException(status_code=404, detail="No committee run yet")
+
+    tracked = portfolios.load()
+    match = next((p for p in tracked if p.name == portfolio), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=f"Portfolio '{portfolio}' not found")
+
+    if exclusions.INVESTMENT_AMOUNT <= 0:
+        raise HTTPException(status_code=400, detail="investment_amount must be > 0")
+
+    holdings = match.positions
+    targets = latest.portfolio
+    all_tickers = list({pos.ticker for pos in holdings} | {tgt.ticker for tgt in targets})
+    prices = await get_current_prices(all_tickers)
+
+    current = await portfolios.enrich(match, prices)
+    current_value = current["total_value"]
+    if current_value is not None and exclusions.INVESTMENT_AMOUNT > current_value:
+        raise HTTPException(
+            status_code=400,
+            detail="investment_amount exceeds portfolio's current value",
+        )
+
+    plan = rebalance.plan_rebalance(
+        holdings,
+        targets,
+        prices,
+        exclusions.INVESTMENT_AMOUNT,
+        exclusions.TAX_RATE,
+        exclusions.MIN_TRADE,
+    )
+    return plan.model_dump(mode="json")

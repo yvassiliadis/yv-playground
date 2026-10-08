@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -5,7 +6,8 @@ from fastapi.testclient import TestClient
 
 import api
 from src import config as exclusions
-from src.models import CommitteeRun
+from src import portfolios, runner
+from src.models import CommitteeRun, PortfolioHolding, PortfolioPosition, TrackedPortfolio
 
 
 def _dummy_run(investment_amount: float) -> CommitteeRun:
@@ -112,3 +114,122 @@ def test_settings_rejects_negative_min_trade(_isolated_settings):
     response = client.put("/api/settings", json={"min_trade": -1.0})
     assert response.status_code == 400
     assert exclusions.MIN_TRADE == 25.0
+
+
+@pytest.fixture
+def _isolated_rebalance(tmp_path, monkeypatch):
+    monkeypatch.setattr(portfolios, "_PORTFOLIOS_PATH", tmp_path / "portfolios.json")
+    monkeypatch.setattr(runner, "RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(exclusions, "INVESTMENT_AMOUNT", 1000.0)
+    monkeypatch.setattr(exclusions, "TAX_RATE", 0.24)
+    monkeypatch.setattr(exclusions, "MIN_TRADE", 25.0)
+    return tmp_path
+
+
+def _seed_run(tmp_path, holdings):
+    run = CommitteeRun(
+        run_id="abc",
+        timestamp=datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+        claude_picks=[],
+        gpt_picks=[],
+        portfolio=holdings,
+    )
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    run_file = runs_dir / f"{run.timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+    run_file.write_text(run.model_dump_json(indent=2))
+
+
+_TARGET_HOLDINGS = [
+    PortfolioHolding(
+        ticker="AAPL",
+        company_name="Apple",
+        conviction="core",
+        weight=50.0,
+        nominated_by=["claude", "gpt"],
+        rationale="steady",
+    ),
+    PortfolioHolding(
+        ticker="MSFT",
+        company_name="Microsoft",
+        conviction="core",
+        weight=50.0,
+        nominated_by=["claude", "gpt"],
+        rationale="steady",
+    ),
+]
+
+
+def test_rebalance_happy_path(_isolated_rebalance):
+    tmp_path = _isolated_rebalance
+    portfolios.save(
+        [
+            TrackedPortfolio(
+                name="Retirement",
+                positions=[PortfolioPosition(ticker="AAPL", shares=10.0, avg_cost=100.0)],
+            )
+        ]
+    )
+    _seed_run(tmp_path, _TARGET_HOLDINGS)
+
+    client = TestClient(api.app)
+    with patch(
+        "api.get_current_prices",
+        AsyncMock(return_value={"AAPL": 200.0, "MSFT": 300.0}),
+    ):
+        response = client.get("/api/rebalance", params={"portfolio": "Retirement"})
+
+    assert response.status_code == 200
+    body = response.json()
+    for key in (
+        "trades",
+        "current_total",
+        "target_total",
+        "cash_withdrawn",
+        "total_buys",
+        "total_sells",
+        "est_tax",
+        "full_liquidation_tax",
+        "warnings",
+    ):
+        assert key in body
+    tickers = {t["ticker"] for t in body["trades"]}
+    assert tickers == {"AAPL", "MSFT"}
+
+
+def test_rebalance_404_when_no_run_exists(_isolated_rebalance):
+    client = TestClient(api.app)
+    response = client.get("/api/rebalance", params={"portfolio": "Retirement"})
+    assert response.status_code == 404
+
+
+def test_rebalance_404_when_portfolio_not_found(_isolated_rebalance):
+    tmp_path = _isolated_rebalance
+    _seed_run(tmp_path, _TARGET_HOLDINGS)
+
+    client = TestClient(api.app)
+    response = client.get("/api/rebalance", params={"portfolio": "Nonexistent"})
+    assert response.status_code == 404
+
+
+def test_rebalance_400_when_amount_exceeds_current_value(_isolated_rebalance, monkeypatch):
+    tmp_path = _isolated_rebalance
+    portfolios.save(
+        [
+            TrackedPortfolio(
+                name="Retirement",
+                positions=[PortfolioPosition(ticker="AAPL", shares=10.0, avg_cost=100.0)],
+            )
+        ]
+    )
+    _seed_run(tmp_path, _TARGET_HOLDINGS)
+    monkeypatch.setattr(exclusions, "INVESTMENT_AMOUNT", 5000.0)
+
+    client = TestClient(api.app)
+    with patch(
+        "api.get_current_prices",
+        AsyncMock(return_value={"AAPL": 200.0, "MSFT": 300.0}),
+    ):
+        response = client.get("/api/rebalance", params={"portfolio": "Retirement"})
+
+    assert response.status_code == 400
