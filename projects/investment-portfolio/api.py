@@ -69,10 +69,9 @@ async def get_latest_run():
 
 
 @app.post("/api/runs")
-async def trigger_run(payload: dict | None = None):
-    investment_amount = (payload or {}).get("investment_amount", 10000.0)
+async def trigger_run():
     ac, oc, gc = _clients()
-    run = await run_committee(ac, oc, gc, investment_amount=investment_amount)
+    run = await run_committee(ac, oc, gc, investment_amount=exclusions.INVESTMENT_AMOUNT)
     return run.model_dump(mode="json")
 
 
@@ -124,17 +123,36 @@ async def get_settings():
     return {
         "excluded_tickers": sorted(exclusions.EXCLUDED_TICKERS),
         "excluded_sectors": sorted(exclusions.EXCLUDED_SECTORS),
+        "investment_amount": exclusions.INVESTMENT_AMOUNT,
+        "tax_rate": exclusions.TAX_RATE,
+        "min_trade": exclusions.MIN_TRADE,
+        "rebalance_portfolio": exclusions.REBALANCE_PORTFOLIO,
     }
 
 
 @app.put("/api/settings")
 async def update_settings(payload: dict):
+    if "investment_amount" in payload and not payload["investment_amount"] > 0:
+        raise HTTPException(status_code=400, detail="investment_amount must be > 0")
+    if "tax_rate" in payload and not (0 <= payload["tax_rate"] < 1):
+        raise HTTPException(status_code=400, detail="tax_rate must be in [0, 1)")
+    if "min_trade" in payload and not payload["min_trade"] >= 0:
+        raise HTTPException(status_code=400, detail="min_trade must be >= 0")
+
     if "excluded_tickers" in payload:
         exclusions.EXCLUDED_TICKERS.clear()
         exclusions.EXCLUDED_TICKERS.update(payload["excluded_tickers"])
     if "excluded_sectors" in payload:
         exclusions.EXCLUDED_SECTORS.clear()
         exclusions.EXCLUDED_SECTORS.update(payload["excluded_sectors"])
+    if "investment_amount" in payload:
+        exclusions.INVESTMENT_AMOUNT = payload["investment_amount"]
+    if "tax_rate" in payload:
+        exclusions.TAX_RATE = payload["tax_rate"]
+    if "min_trade" in payload:
+        exclusions.MIN_TRADE = payload["min_trade"]
+    if "rebalance_portfolio" in payload:
+        exclusions.REBALANCE_PORTFOLIO = payload["rebalance_portfolio"]
     exclusions.save()
     return {"ok": True}
 

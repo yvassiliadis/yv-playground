@@ -17,6 +17,11 @@ EXCLUDED_SECTORS: set[str] = {
 _DEFAULT_TICKERS: frozenset[str] = frozenset(EXCLUDED_TICKERS)
 _DEFAULT_SECTORS: frozenset[str] = frozenset(EXCLUDED_SECTORS)
 
+INVESTMENT_AMOUNT: float = 10000.0
+TAX_RATE: float = 0.24
+MIN_TRADE: float = 25.0
+REBALANCE_PORTFOLIO: str | None = None
+
 
 def load() -> None:
     if not _EXCLUSIONS_FILE.exists():
@@ -26,6 +31,11 @@ def load() -> None:
     EXCLUDED_TICKERS.update(data.get("tickers", _DEFAULT_TICKERS))
     EXCLUDED_SECTORS.clear()
     EXCLUDED_SECTORS.update(data.get("sectors", _DEFAULT_SECTORS))
+    global INVESTMENT_AMOUNT, TAX_RATE, MIN_TRADE, REBALANCE_PORTFOLIO
+    INVESTMENT_AMOUNT = data.get("investment_amount", INVESTMENT_AMOUNT)
+    TAX_RATE = data.get("tax_rate", TAX_RATE)
+    MIN_TRADE = data.get("min_trade", MIN_TRADE)
+    REBALANCE_PORTFOLIO = data.get("rebalance_portfolio", REBALANCE_PORTFOLIO)
 
 
 def save() -> None:
@@ -35,6 +45,10 @@ def save() -> None:
             {
                 "tickers": sorted(EXCLUDED_TICKERS),
                 "sectors": sorted(EXCLUDED_SECTORS),
+                "investment_amount": INVESTMENT_AMOUNT,
+                "tax_rate": TAX_RATE,
+                "min_trade": MIN_TRADE,
+                "rebalance_portfolio": REBALANCE_PORTFOLIO,
             },
             indent=2,
         )
