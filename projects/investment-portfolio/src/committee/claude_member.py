@@ -10,6 +10,9 @@ from ..config import EXCLUDED_TICKERS
 from ..models import Pick, WebSource
 from .philosophy import ADVISOR_PHILOSOPHY, MANDATE
 
+PICKS_MODEL = "claude-sonnet-5-5"
+OPINION_MODEL = "claude-sonnet-5-5"
+
 RESEARCH_SYSTEM_PROMPT = """You are a financial research analyst preparing a market briefing for an investment committee focused on high-quality growth stocks on US exchanges.
 
 Search for current information and provide a concise briefing covering:
@@ -169,7 +172,7 @@ async def get_research(client: anthropic.AsyncAnthropic) -> tuple[str, list[WebS
 
     while True:
         response = await client.messages.create(
-            model="claude-sonnet-5-5",
+            model=PICKS_MODEL,
             max_tokens=8192,
             output_config={"effort": "medium"},
             system=RESEARCH_SYSTEM_PROMPT,
@@ -227,7 +230,7 @@ async def get_picks(
 
     t0 = time.monotonic()
     response = await client.messages.create(
-        model="claude-sonnet-5-5",
+        model=PICKS_MODEL,
         max_tokens=8192,
         output_config={"effort": "medium"},
         system=system,
@@ -257,7 +260,7 @@ async def get_stock_opinion(
     if portfolio_context:
         content = f"{content}\n\n{portfolio_context}"
     message = await client.messages.create(
-        model="claude-sonnet-5-5",
+        model=OPINION_MODEL,
         max_tokens=4096,
         output_config={"effort": "low"},
         system=ADVISOR_SYSTEM_PROMPT,

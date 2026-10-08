@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 _ADVISOR_CACHE_PATH = Path(__file__).parent.parent / "data" / "advisor_cache.json"
 _ADVISOR_CACHE_TTL_SECONDS = 4 * 3600
+_ADVISOR_MODELS = {
+    "claude": claude_member.OPINION_MODEL,
+    "gpt": gpt_member.OPINION_MODEL,
+    "gemini": gemini_member.OPINION_MODEL,
+}
 
 
 def _load_cache() -> dict:
@@ -148,7 +153,9 @@ async def ask_committee(
     yf_company_name: str | None = None
     members_needed = [
         m for m in ("claude", "gpt", "gemini")
-        if cached is None or cached.get(m) is None
+        if cached is None
+        or cached.get(m) is None
+        or cached.get("models", {}).get(m) != _ADVISOR_MODELS[m]
     ]
 
     if not members_needed and cached:
@@ -173,17 +180,27 @@ async def ask_committee(
 
         gathered = await asyncio.gather(*task_map.values(), return_exceptions=True)
         new_results = {}
+        merged_models = dict((cached or {}).get("models", {}))
         for key, result in zip(task_map.keys(), gathered):
             if isinstance(result, Exception):
                 logger.warning(f"{key.capitalize()} advisor failed — excluding from response", exc_info=result)
                 new_results[key] = None
             else:
                 new_results[key] = result
+                merged_models[key] = _ADVISOR_MODELS[key]
 
         merged = {m: (cached or {}).get(m) for m in ("claude", "gpt", "gemini")}
         merged.update(new_results)
 
-        _set_cached(ticker, {"upside": upside, "yf_company_name": yf_company_name, **merged})
+        _set_cached(
+            ticker,
+            {
+                "upside": upside,
+                "yf_company_name": yf_company_name,
+                "models": merged_models,
+                **merged,
+            },
+        )
 
         claude_result = merged["claude"] or {}
         gpt_result = merged["gpt"] or {}

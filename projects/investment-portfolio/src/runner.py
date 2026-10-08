@@ -25,14 +25,31 @@ _PICKS_CACHE_DIR = Path(__file__).parent.parent / "data" / "picks_cache"
 _RUN_FILENAME_RE = re.compile(r"^\d{8}_\d{6}$")
 _PICKS_CACHE_TTL_SECONDS = 24 * 3600
 _RESEARCH_CACHE_TTL_SECONDS = 24 * 3600
+_REQUIRED_MOONSHOTS = 3
+_MIN_CORE_PICKS = 10
+_MAX_CORE_PICKS = 25
 
 
-def _load_picks_cache(member: str) -> tuple[list[Pick], list[WebSource]] | None:
+def _picks_shape_problem(picks: list[Pick]) -> str | None:
+    moonshots = sum(1 for p in picks if p.conviction == "moonshot")
+    core = sum(1 for p in picks if p.conviction == "core")
+    if moonshots != _REQUIRED_MOONSHOTS:
+        return f"{moonshots} moonshot(s); expected {_REQUIRED_MOONSHOTS}"
+    if not (_MIN_CORE_PICKS <= core <= _MAX_CORE_PICKS):
+        return f"{core} core pick(s); expected {_MIN_CORE_PICKS}-{_MAX_CORE_PICKS}"
+    return None
+
+
+def _load_picks_cache(
+    member: str, model: str
+) -> tuple[list[Pick], list[WebSource]] | None:
     path = _PICKS_CACHE_DIR / f"{member}.json"
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text())
+        if data.get("model") != model:
+            return None
         cached_at = datetime.fromisoformat(data["cached_at"])
         age = (datetime.now(timezone.utc) - cached_at).total_seconds()
         if age > _PICKS_CACHE_TTL_SECONDS:
@@ -46,12 +63,14 @@ def _load_picks_cache(member: str) -> tuple[list[Pick], list[WebSource]] | None:
         return None
 
 
-def _load_research_cache() -> tuple[str, list[WebSource]] | None:
+def _load_research_cache(model: str) -> tuple[str, list[WebSource]] | None:
     path = _PICKS_CACHE_DIR / "research.json"
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text())
+        if data.get("model") != model:
+            return None
         cached_at = datetime.fromisoformat(data["cached_at"])
         age = (datetime.now(timezone.utc) - cached_at).total_seconds()
         if age > _RESEARCH_CACHE_TTL_SECONDS:
@@ -64,12 +83,15 @@ def _load_research_cache() -> tuple[str, list[WebSource]] | None:
         return None
 
 
-def _save_research_cache(research: str, sources: list[WebSource]) -> None:
+def _save_research_cache(
+    model: str, research: str, sources: list[WebSource]
+) -> None:
     try:
         _PICKS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         (_PICKS_CACHE_DIR / "research.json").write_text(
             json.dumps(
                 {
+                    "model": model,
                     "cached_at": datetime.now(timezone.utc).isoformat(),
                     "research": research,
                     "sources": [s.model_dump() for s in sources],
@@ -81,12 +103,19 @@ def _save_research_cache(research: str, sources: list[WebSource]) -> None:
         logger.warning("Failed to save research cache", exc_info=True)
 
 
-def _save_picks_cache(member: str, picks: list[Pick], sources: list[WebSource]) -> None:
+def _save_picks_cache(
+    member: str, model: str, picks: list[Pick], sources: list[WebSource]
+) -> None:
+    problem = _picks_shape_problem(picks)
+    if problem:
+        logger.warning("%s returned %s — not caching", member, problem)
+        return
     try:
         _PICKS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         (_PICKS_CACHE_DIR / f"{member}.json").write_text(
             json.dumps(
                 {
+                    "model": model,
                     "cached_at": datetime.now(timezone.utc).isoformat(),
                     "picks": [p.model_dump() for p in picks],
                     "sources": [s.model_dump() for s in sources],
@@ -107,39 +136,39 @@ async def run_committee(
     screened = await screen_universe()
     screened_section = format_for_prompt(screened)
 
-    claude_cache = _load_picks_cache("claude")
-    gpt_cache = _load_picks_cache("gpt")
-    gemini_cache = _load_picks_cache("gemini")
+    claude_cache = _load_picks_cache("claude", claude_member.PICKS_MODEL)
+    gpt_cache = _load_picks_cache("gpt", gpt_member.PICKS_MODEL)
+    gemini_cache = _load_picks_cache("gemini", gemini_member.PICKS_MODEL)
 
     async def _claude() -> tuple[list[Pick], list[WebSource]]:
         if claude_cache:
             return claude_cache
         t0 = time.monotonic()
-        research_cache = _load_research_cache()
+        research_cache = _load_research_cache(claude_member.PICKS_MODEL)
         if research_cache:
             research, sources = research_cache
         else:
             research, sources = await claude_member.get_research(anthropic_client)
-            _save_research_cache(research, sources)
+            _save_research_cache(claude_member.PICKS_MODEL, research, sources)
         picks = await claude_member.get_picks(
             anthropic_client, screened_section, research
         )
         logger.info("Claude total: %.1fs", time.monotonic() - t0)
-        _save_picks_cache("claude", picks, sources)
+        _save_picks_cache("claude", claude_member.PICKS_MODEL, picks, sources)
         return picks, sources
 
     async def _gpt() -> list[Pick]:
         if gpt_cache:
             return gpt_cache[0]
         picks = await gpt_member.get_picks(openai_client, screened_section)
-        _save_picks_cache("gpt", picks, [])
+        _save_picks_cache("gpt", gpt_member.PICKS_MODEL, picks, [])
         return picks
 
     async def _gemini() -> list[Pick]:
         if gemini_cache:
             return gemini_cache[0]
         picks = await gemini_member.get_picks(gemini_client, screened_section)
-        _save_picks_cache("gemini", picks, [])
+        _save_picks_cache("gemini", gemini_member.PICKS_MODEL, picks, [])
         return picks
 
     results = await asyncio.gather(_claude(), _gpt(), _gemini(), return_exceptions=True)
@@ -171,40 +200,17 @@ async def run_committee(
     if not claude_picks and not gpt_picks and not gemini_picks:
         raise RuntimeError("All committee members failed — cannot build portfolio")
 
-    for member, picks in [
-        ("claude", claude_picks),
-        ("gpt", gpt_picks),
-        ("gemini", gemini_picks),
-    ]:
-        if not picks:
-            continue
-        moonshots = [p for p in picks if p.conviction == "moonshot"]
-        core = [p for p in picks if p.conviction == "core"]
-        if len(moonshots) != 3:
-            logger.warning(
-                "%s returned %d moonshot(s); expected 3 — skipping member",
-                member,
-                len(moonshots),
-            )
-            if member == "claude":
-                claude_picks = []
-            elif member == "gpt":
-                gpt_picks = []
-            elif member == "gemini":
-                gemini_picks = []
-            continue
-        if not (10 <= len(core) <= 25):
-            logger.warning(
-                "%s returned %d core pick(s); expected 10-25 — skipping member",
-                member,
-                len(core),
-            )
-            if member == "claude":
-                claude_picks = []
-            elif member == "gpt":
-                gpt_picks = []
-            elif member == "gemini":
-                gemini_picks = []
+    picks_by_member = {
+        "claude": claude_picks,
+        "gpt": gpt_picks,
+        "gemini": gemini_picks,
+    }
+    for member, picks in picks_by_member.items():
+        problem = _picks_shape_problem(picks) if picks else None
+        if problem:
+            logger.warning("%s returned %s — skipping member", member, problem)
+            picks_by_member[member] = []
+    claude_picks, gpt_picks, gemini_picks = picks_by_member.values()
 
     excluded_upper = {t.upper() for t in EXCLUDED_TICKERS}
     claude_picks = [p for p in claude_picks if p.ticker.upper() not in excluded_upper]
