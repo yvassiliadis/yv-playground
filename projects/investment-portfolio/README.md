@@ -26,6 +26,7 @@ Built as a showcase of how I use LLMs iteratively to ship a real product. See [`
 - **Advisor** — ask the committee for an opinion on any ticker; responses are cached and logged
 - **Performance** — portfolio vs. benchmarks (SPY, VGT, VTI) over a rolling 1-year window
 - **Exclusions** — live filtering of tickers or sectors from the portfolio, applied without re-running
+- **Rebalance** — minimal-turnover trade plan from a tracked portfolio to the latest committee weights, with estimated tax vs. a full liquidation
 
 ## How it works
 
