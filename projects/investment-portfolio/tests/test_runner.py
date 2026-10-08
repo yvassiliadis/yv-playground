@@ -43,8 +43,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src import runner
-from src.models import Pick
+from src import config, runner
+from src.models import Pick, PortfolioPosition, TrackedPortfolio
 
 
 def _valid_picks(member: str) -> list[Pick]:
@@ -137,3 +137,36 @@ def test_research_cache_ignored_for_other_model():
     runner._save_research_cache("some-older-model", "briefing", [])
     assert runner._load_research_cache("some-older-model") == ("briefing", [])
     assert runner._load_research_cache("another-model") is None
+
+
+async def test_run_committee_includes_held_tickers_in_screened_section(monkeypatch):
+    monkeypatch.setattr(config, "REBALANCE_PORTFOLIO", "Retirement")
+    tracked = [
+        TrackedPortfolio(
+            name="Retirement",
+            positions=[PortfolioPosition(ticker="ZZZZ", shares=10.0)],
+        )
+    ]
+    get_picks_calls: list[str] = []
+
+    async def _capture_get_picks(*args):
+        screened_section = args[1]
+        get_picks_calls.append(screened_section)
+        return _valid_picks("gpt")
+
+    with patch("src.runner.portfolios.load", return_value=tracked), \
+         patch("src.runner.screen_universe", return_value=[]), \
+         patch(
+             "src.screener.yf.Ticker",
+             return_value=type("T", (), {"info": {}})(),
+         ), \
+         patch("src.runner.claude_member.get_research", return_value=("research", [])), \
+         patch("src.runner.claude_member.get_picks", return_value=_valid_picks("claude")), \
+         patch("src.runner.gpt_member.get_picks", _capture_get_picks), \
+         patch("src.runner.gemini_member.get_picks", return_value=_valid_picks("gemini")), \
+         patch("src.runner.enrich_picks_with_prices", side_effect=lambda picks: picks):
+        await runner.run_committee(AsyncMock(), AsyncMock(), AsyncMock())
+
+    assert len(get_picks_calls) == 1
+    assert "ZZZZ" in get_picks_calls[0]
+    assert "ADDITIONAL" in get_picks_calls[0]
