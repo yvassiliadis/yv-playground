@@ -256,6 +256,26 @@ def test_duplicate_lot_missing_avg_cost_makes_merged_avg_cost_unknown():
     assert any("avg_cost unknown" in w for w in plan.warnings)
 
 
+def test_goog_googl_cross_alias_targets_merge_weights_into_one_row():
+    holdings = []  # not currently held
+    targets = [make_target("GOOG", 50), make_target("GOOGL", 50)]
+    prices = {"GOOG": 10.0}
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=100.0, tax_rate=0.2, min_trade=1.0
+    )
+
+    assert len(plan.trades) == 1
+    trade = plan.trades[0]
+    assert trade.ticker == "GOOG"
+    # weights summed (50 + 50 = 100) rather than the last one silently winning
+    assert trade.target_value == pytest.approx(100.0)
+    assert trade.action == "buy"
+    assert any(
+        "GOOG/GOOGL" in w and "merged" in w for w in plan.warnings
+    )
+
+
 def test_goog_googl_cross_alias_holdings_merge_into_one_position():
     holdings = [
         PortfolioPosition(ticker="GOOG", shares=2.0, avg_cost=50.0),
@@ -303,3 +323,29 @@ def test_negative_cash_withdrawn_surfaces_a_warning():
 
     assert plan.cash_withdrawn == pytest.approx(-40.0)
     assert any("additional cash" in w for w in plan.warnings)
+
+
+def test_zero_buy_rows_after_min_trade_filter_leaves_proceeds_uninvested_with_warning():
+    holdings = [PortfolioPosition(ticker="AAA", shares=10.0)]
+    targets = [
+        make_target("AAA", 0),  # target$ = 0, current 100 -> full sell
+        make_target("BBB", 5),  # target$ = 5, current 0 -> delta +5, below min_trade
+    ]
+    prices = {"AAA": 10.0, "BBB": 1.0}
+
+    plan = plan_rebalance(
+        holdings, targets, prices, amount=100.0, tax_rate=0.2, min_trade=25.0
+    )
+    trades = trades_by_ticker(plan)
+
+    # Plan still returns normally: no crash, zero buys, the sell still happens.
+    assert trades["AAA"].action == "sell"
+    assert trades["BBB"].action == "hold"
+    assert plan.total_buys == pytest.approx(0.0)
+    assert plan.total_sells == pytest.approx(100.0)
+    # The self-funded invariant doesn't hold here -- sale proceeds are left
+    # uninvested rather than forcing a trade below min_trade -- but that must
+    # be visible, not silent.
+    assert any(
+        "100.00" in w and "uninvested" in w and "25.00" in w for w in plan.warnings
+    )

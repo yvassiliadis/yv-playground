@@ -12,6 +12,13 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+// Rounds to a handful of decimal places so a stored fraction like 0.29
+// doesn't display as 28.999999999999996 due to float noise, while still
+// keeping more precision than a user would ever type.
+function taxRatePercent(taxRate) {
+  return Math.round((taxRate ?? 0) * 100 * 10000) / 10000;
+}
+
 export async function initSettings() {
   const view = document.getElementById('view-settings');
   let settings = {
@@ -81,7 +88,7 @@ export async function initSettings() {
       </div>
       <div>
         <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;font-style:italic;color:var(--text-2);margin-bottom:16px;">Tax Rate %</div>
-        <input class="settings-input" id="tax-rate-input" type="number" min="0" max="99.99" step="any" value="${(settings.tax_rate ?? 0) * 100}" style="width:100px;">
+        <input class="settings-input" id="tax-rate-input" type="number" min="0" max="99.99" step="any" value="${taxRatePercent(settings.tax_rate)}" style="width:100px;">
       </div>
       <div>
         <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:600;font-style:italic;color:var(--text-2);margin-bottom:16px;">Min Trade $</div>
@@ -132,7 +139,7 @@ export async function initSettings() {
   // the visible input (which would otherwise poison every later save).
   function syncNumericInputs() {
     document.getElementById('investment-amount-input').value = settings.investment_amount ?? '';
-    document.getElementById('tax-rate-input').value = (settings.tax_rate ?? 0) * 100;
+    document.getElementById('tax-rate-input').value = taxRatePercent(settings.tax_rate);
     document.getElementById('min-trade-input').value = settings.min_trade ?? '';
     document.getElementById('rebalance-portfolio-input').value = settings.rebalance_portfolio ?? '';
   }
@@ -206,8 +213,20 @@ export async function initSettings() {
   });
 
   document.getElementById('use-current-value-btn').addEventListener('click', async () => {
-    const match = currentMatchedPortfolio();
+    // Re-fetch portfolios fresh rather than reusing the array captured at
+    // initSettings() load time — prices refresh every 2 hours, so a stale
+    // snapshot here can fill in a number that's already wrong and then fail
+    // the (fixed) amount-exceeds-current-value 400 check on save.
+    let freshPortfolios;
+    try {
+      freshPortfolios = await api.getPortfolios();
+    } catch (e) {
+      showToast(e.message, 'error');
+      return;
+    }
+    const match = freshPortfolios.find(p => p.name === settings.rebalance_portfolio) ?? null;
     if (!match || match.total_value == null) return;
+    portfolios = freshPortfolios;
     const snapshot = { ...settings };
     settings.investment_amount = match.total_value;
     document.getElementById('investment-amount-input').value = match.total_value;

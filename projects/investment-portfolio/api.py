@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 
 from src import advisor_log, demo, portfolios, rebalance
 from src import config as exclusions
@@ -130,29 +131,44 @@ async def get_settings():
     }
 
 
+class SettingsUpdate(BaseModel):
+    # strict=True on the numeric fields: Pydantic v2's default lax mode treats
+    # bool as an int subtype and silently coerces True/False into 1.0/0.0,
+    # which would let a malformed `true` sail through as a valid amount.
+    investment_amount: float | None = Field(default=None, strict=True)
+    tax_rate: float | None = Field(default=None, strict=True)
+    min_trade: float | None = Field(default=None, strict=True)
+    rebalance_portfolio: str | None = None
+    excluded_tickers: list[str] | None = None
+    excluded_sectors: list[str] | None = None
+
+
 @app.put("/api/settings")
-async def update_settings(payload: dict):
-    if "investment_amount" in payload and not payload["investment_amount"] > 0:
+async def update_settings(payload: SettingsUpdate):
+    if payload.investment_amount is not None and not payload.investment_amount > 0:
         raise HTTPException(status_code=400, detail="investment_amount must be > 0")
-    if "tax_rate" in payload and not (0 <= payload["tax_rate"] < 1):
+    if payload.tax_rate is not None and not (0 <= payload.tax_rate < 1):
         raise HTTPException(status_code=400, detail="tax_rate must be in [0, 1)")
-    if "min_trade" in payload and not payload["min_trade"] >= 0:
+    if payload.min_trade is not None and not payload.min_trade >= 0:
         raise HTTPException(status_code=400, detail="min_trade must be >= 0")
 
-    if "excluded_tickers" in payload:
+    if payload.excluded_tickers is not None:
         exclusions.EXCLUDED_TICKERS.clear()
-        exclusions.EXCLUDED_TICKERS.update(payload["excluded_tickers"])
-    if "excluded_sectors" in payload:
+        exclusions.EXCLUDED_TICKERS.update(payload.excluded_tickers)
+    if payload.excluded_sectors is not None:
         exclusions.EXCLUDED_SECTORS.clear()
-        exclusions.EXCLUDED_SECTORS.update(payload["excluded_sectors"])
-    if "investment_amount" in payload:
-        exclusions.INVESTMENT_AMOUNT = payload["investment_amount"]
-    if "tax_rate" in payload:
-        exclusions.TAX_RATE = payload["tax_rate"]
-    if "min_trade" in payload:
-        exclusions.MIN_TRADE = payload["min_trade"]
-    if "rebalance_portfolio" in payload:
-        exclusions.REBALANCE_PORTFOLIO = payload["rebalance_portfolio"]
+        exclusions.EXCLUDED_SECTORS.update(payload.excluded_sectors)
+    if payload.investment_amount is not None:
+        exclusions.INVESTMENT_AMOUNT = payload.investment_amount
+    if payload.tax_rate is not None:
+        exclusions.TAX_RATE = payload.tax_rate
+    if payload.min_trade is not None:
+        exclusions.MIN_TRADE = payload.min_trade
+    # rebalance_portfolio is intentionally checked via model_fields_set (not a
+    # plain None check): the Settings UI sends an explicit `null` to clear the
+    # selection back to "no rebalance portfolio", which must still apply.
+    if "rebalance_portfolio" in payload.model_fields_set:
+        exclusions.REBALANCE_PORTFOLIO = payload.rebalance_portfolio
     exclusions.save()
     return {"ok": True}
 
@@ -236,14 +252,6 @@ async def get_rebalance(portfolio: str):
     all_tickers = list({pos.ticker for pos in holdings} | {tgt.ticker for tgt in targets})
     prices = await get_current_prices(all_tickers)
 
-    current = await portfolios.enrich(match, prices)
-    current_value = current["total_value"]
-    if current_value is not None and exclusions.INVESTMENT_AMOUNT > current_value:
-        raise HTTPException(
-            status_code=400,
-            detail="investment_amount exceeds portfolio's current value",
-        )
-
     plan = rebalance.plan_rebalance(
         holdings,
         targets,
@@ -252,4 +260,12 @@ async def get_rebalance(portfolio: str):
         exclusions.TAX_RATE,
         exclusions.MIN_TRADE,
     )
+    if exclusions.INVESTMENT_AMOUNT > plan.current_total:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"investment_amount (${exclusions.INVESTMENT_AMOUNT:,.2f}) exceeds "
+                f"portfolio's current value (${plan.current_total:,.2f})"
+            ),
+        )
     return plan.model_dump(mode="json")

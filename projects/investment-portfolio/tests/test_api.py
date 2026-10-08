@@ -116,6 +116,31 @@ def test_settings_rejects_negative_min_trade(_isolated_settings):
     assert exclusions.MIN_TRADE == 25.0
 
 
+def test_settings_rejects_malformed_type_with_422_not_500(_isolated_settings):
+    client = TestClient(api.app)
+    response = client.put("/api/settings", json={"investment_amount": "not a number"})
+    assert response.status_code == 422
+    assert exclusions.INVESTMENT_AMOUNT == 10000.0
+
+
+def test_settings_rejects_bool_investment_amount(_isolated_settings):
+    # Pydantic v2's default lax mode treats bool as an int subtype and would
+    # otherwise silently coerce True/False into 1.0/0.0; the field is strict
+    # to close that gap.
+    client = TestClient(api.app)
+    response = client.put("/api/settings", json={"investment_amount": True})
+    assert response.status_code == 422
+    assert exclusions.INVESTMENT_AMOUNT == 10000.0
+
+
+def test_settings_clearing_rebalance_portfolio_with_explicit_null(_isolated_settings):
+    client = TestClient(api.app)
+    client.put("/api/settings", json={"rebalance_portfolio": "core-growth"})
+    response = client.put("/api/settings", json={"rebalance_portfolio": None})
+    assert response.status_code == 200
+    assert exclusions.REBALANCE_PORTFOLIO is None
+
+
 @pytest.fixture
 def _isolated_rebalance(tmp_path, monkeypatch):
     monkeypatch.setattr(portfolios, "_PORTFOLIOS_PATH", tmp_path / "portfolios.json")
@@ -233,3 +258,41 @@ def test_rebalance_400_when_amount_exceeds_current_value(_isolated_rebalance, mo
         response = client.get("/api/rebalance", params={"portfolio": "Retirement"})
 
     assert response.status_code == 400
+
+
+def test_rebalance_400_when_amount_exceeds_priced_total_despite_unpriced_position(
+    _isolated_rebalance, monkeypatch
+):
+    # Regression test: portfolios.enrich()'s total_value is None as soon as ANY
+    # position lacks a price, which used to make the 400 guard never fire for a
+    # portfolio with a mix of priced and unpriced positions. The fixed check
+    # uses the rebalance engine's own current_total (priced rows only), so it
+    # must still 400 here even though ZETA has no price.
+    tmp_path = _isolated_rebalance
+    portfolios.save(
+        [
+            TrackedPortfolio(
+                name="Retirement",
+                positions=[
+                    PortfolioPosition(ticker="AAPL", shares=10.0, avg_cost=100.0),
+                    PortfolioPosition(ticker="ZETA", shares=5.0, avg_cost=10.0),
+                ],
+            )
+        ]
+    )
+    _seed_run(tmp_path, _TARGET_HOLDINGS)
+    # AAPL alone is worth 10 * 200 = 2000; ZETA has no price. Investment amount
+    # exceeds the priced total (2000) even though the whole-portfolio total is
+    # unknown (None) because of the unpriced ZETA position.
+    monkeypatch.setattr(exclusions, "INVESTMENT_AMOUNT", 3000.0)
+
+    client = TestClient(api.app)
+    with patch(
+        "api.get_current_prices",
+        AsyncMock(return_value={"AAPL": 200.0, "MSFT": 300.0, "ZETA": None}),
+    ):
+        response = client.get("/api/rebalance", params={"portfolio": "Retirement"})
+
+    assert response.status_code == 400
+    assert "3,000.00" in response.json()["detail"]
+    assert "2,000.00" in response.json()["detail"]

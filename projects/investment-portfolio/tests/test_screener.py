@@ -66,8 +66,15 @@ async def test_already_screened_ticker_not_duplicated_via_alias():
     assert len(result) == 1
 
 
-async def test_manually_excluded_ticker_not_added():
-    # TSLA is in the default EXCLUDED_TICKERS set in src/config.py
+async def test_manually_excluded_ticker_not_added(monkeypatch):
+    # src/screener.py does `from .config import EXCLUDED_TICKERS`, binding its
+    # own module-level name to the same set object — so pin that name
+    # directly (not src.config.EXCLUDED_TICKERS) to a known fixture value,
+    # rather than relying on config.py's current/default state, which
+    # config.load() may have already overwritten in place from the real
+    # (gitignored) data/exclusions.json if another test (e.g. test_api.py,
+    # via `import api`) ran first this session.
+    monkeypatch.setattr("src.screener.EXCLUDED_TICKERS", {"TSLA"})
     with patch("src.screener.yf.Ticker") as mock_ticker:
         result = await add_held_tickers([], ["TSLA"])
 
@@ -75,7 +82,8 @@ async def test_manually_excluded_ticker_not_added():
     assert result == []
 
 
-async def test_manually_excluded_sector_not_added():
+async def test_manually_excluded_sector_not_added(monkeypatch):
+    monkeypatch.setattr("src.screener.EXCLUDED_SECTORS", {"Energy"})
     info_by_ticker = {
         "XOM": {
             "longName": "Exxon Mobil Corporation",

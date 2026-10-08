@@ -43,9 +43,29 @@ def plan_rebalance(
             avg_cost=merged_avg_cost,
         )
 
-    targets_by_canon: dict[str, PortfolioHolding] = {}
+    # Merge target entries that resolve to the same canonical ticker (e.g. the
+    # committee run somehow lists both GOOG and GOOGL): sum their weights so
+    # target_value isn't undercounted by silently dropping all but the last one.
+    target_groups: dict[str, list[PortfolioHolding]] = {}
     for tgt in targets:
-        targets_by_canon[canonical_ticker(tgt.ticker)] = tgt
+        target_groups.setdefault(canonical_ticker(tgt.ticker), []).append(tgt)
+
+    targets_by_canon: dict[str, PortfolioHolding] = {}
+    for canon, group in target_groups.items():
+        if len(group) == 1:
+            targets_by_canon[canon] = group[0]
+            continue
+
+        merged_weight = sum(t.weight for t in group)
+        spellings = list(dict.fromkeys(t.ticker for t in group))
+        if len(spellings) > 1:
+            warnings.append(
+                f"{'/'.join(spellings)} are the same company (targeted under both spellings) — merged for this plan"
+            )
+
+        targets_by_canon[canon] = group[0].model_copy(
+            update={"ticker": spellings[0], "weight": merged_weight}
+        )
 
     # Stable order: holdings first (in input order), then target-only tickers.
     order: list[str] = []
@@ -136,6 +156,16 @@ def plan_rebalance(
         scale = 0.0
     elif raw_buy_sum > 0:
         scale = target_buy_sum / raw_buy_sum
+    elif target_buy_sum > 0:
+        # There's money to reinvest, but every candidate buy fell below
+        # min_trade and got filtered to a hold. Don't force a trade below the
+        # threshold — just surface the leftover cash instead of silently
+        # leaving it uninvested.
+        warnings.append(
+            f"${target_buy_sum:,.2f} in sale proceeds left uninvested — every buy "
+            f"candidate was below the ${min_trade:,.2f} minimum trade size."
+        )
+        scale = 1.0
     else:
         scale = 1.0
 

@@ -10,7 +10,8 @@ function esc(s) {
 
 function formatCurrency(v) {
   if (v == null) return '–';
-  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const sign = v < 0 ? '-' : '';
+  return sign + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 const ACTION_ORDER = { sell: 0, buy: 1, hold: 2 };
@@ -106,7 +107,13 @@ export async function initRebalance() {
   const content = document.getElementById('rebalance-content');
   const select = document.getElementById('rebalance-portfolio-select');
 
+  // Guards against out-of-order responses: if the user switches the
+  // portfolio dropdown twice quickly, a slower first request's response
+  // must not overwrite the second, correct selection's rendered result.
+  let _selectedPortfolio = null;
+
   async function loadPlan(portfolioName) {
+    _selectedPortfolio = portfolioName;
     if (!portfolioName) {
       content.innerHTML = `<div style="color:var(--text-4);font-family:var(--font-mono);font-size:0.8rem;padding:20px 0;">No tracked portfolios yet. Add one in the Tracker tab.</div>`;
       return;
@@ -116,9 +123,11 @@ export async function initRebalance() {
     try {
       plan = await api.getRebalance(portfolioName);
     } catch (e) {
+      if (_selectedPortfolio !== portfolioName) return;
       content.innerHTML = `<div style="color:var(--red);font-family:var(--font-mono);font-size:0.8rem;padding:20px 0;">${esc(e.message)}</div>`;
       return;
     }
+    if (_selectedPortfolio !== portfolioName) return;
 
     const saved = plan.full_liquidation_tax - plan.est_tax;
     const savedColor = saved >= 0 ? 'var(--green)' : 'var(--red)';

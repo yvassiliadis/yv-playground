@@ -62,6 +62,7 @@ function route() {
   if (view === 'performance') initPerformance(latestRun);
   if (view === 'tracker') initTracker(latestRun);
   if (view === 'rebalance') initRebalance();
+  if (view === 'settings') initSettings();
 }
 
 function scheduleMarketCloseRefresh() {
